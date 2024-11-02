@@ -105,10 +105,10 @@ const DashboardPage = () => {
         <div className="sticky top-0 z-50 bg-black ">
             <Navbar/>
       
-            <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-100 dark:from-slate-950 dark:via-gray-900 dark:to-zinc-900 backdrop-filter backdrop-blur-sm bg-opacity-95">
+            <div className="flex min-h-screen bg-white">
                 <ModernSidebar />
             
-                <div className="flex-grow p-8">
+                <div className="flex-grow p-8 bg-white">
                     <div className="max-w-7xl mx-auto">
                         {/* Header Section */}
                         <motion.div 
@@ -229,8 +229,10 @@ const DashboardPage = () => {
                     </div>
                 </div>
             </div>
+            <Footer/>
       
         </div>
+
        
     )
 }

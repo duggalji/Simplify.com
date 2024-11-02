@@ -11,9 +11,13 @@ import SparklesText from "@/components/ui/sparkles-text";
 import { COMPANIES, PROCESS } from "@/utils";
 import { REVIEWS } from "@/utils/constants/misc";
 import { currentUser } from "@clerk/nextjs/server";
-import { ArrowRightIcon, CreditCardIcon, StarIcon } from "lucide-react";
+import { ArrowRightIcon, ArrowRight,CreditCardIcon, StarIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { AiTabs } from "@/components/tabs";
+import { SignupFormDemo } from "@/components/ui-form";
+import Pricing from "@/components/pricing";
+import Offerings from "@/components/offerings";
 
 const HomePage = async () => {
 
@@ -42,18 +46,24 @@ const HomePage = async () => {
                           
                         </h1>
                        
-                        <p className="mb-14 text-xl tracking-tight text-neutral-300 md:text-2xl max-w-3xl mx-auto font-light">
+                        <p className="mb-14 text-xl tracking-tight text-neutral-100 md:text-2xl max-w-3xl mx-auto font-light">
                             #1 AI-Powered JSON Converter & Content Generator
                             <br className="hidden md:block" />
                             <span className="hidden md:block bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent font-medium">Transform Any Data Format. Generate Elite Content. Scale Effortlessly.</span>
                         </p>
-                        <div className="flex items-center justify-center whitespace-nowrap gap-8 z-50">
-                            <Button asChild className="px-10 py-7 text-lg bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-500 border-none shadow-xl hover:shadow-2xl hover:shadow-violet-500/30 transition-all duration-500 rounded-2xl">
-                                <Link href={user ? "/dashboard" : "/auth/sign-in"} className="flex items-center gap-3">
-                                    Launch AI Dashboard
-                                    <ArrowRightIcon className="w-6 h-6" />
-                                </Link>
-                            </Button>
+                        
+                        <div className="hidden md:flex relative items-center justify-center mt-8 md:mt-12 w-full">
+                            <Link href="/dashboard" className="group relative flex items-center justify-center w-max rounded-full border border-violet-500/20 bg-gradient-to-r from-violet-600/10 via-fuchsia-600/10 to-indigo-600/10 backdrop-blur-2xl px-4 py-3 gap-4 shadow-[0_0_25px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all duration-500 hover:scale-105">
+                                <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-indigo-600/20 animate-pulse rounded-full"></div>
+                                <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 rounded-full blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
+                                <p className="relative z-10 text-base font-medium bg-gradient-to-r from-violet-200 to-indigo-200 bg-clip-text text-transparent">
+                                    ✨ Transform Your Data Instantly
+                                </p>
+                                <Button size="sm" className="relative z-10 rounded-full bg-white text-slate-800 border-none shadow-lg hover:shadow-xl hover:shadow-violet-500/30 hover:bg-gradient-to-r hover:from-violet-600 hover:via-fuchsia-600 hover:to-indigo-600 hover:text-white transition-all duration-500">
+                                    <span className="font-medium">Get Started</span>
+                                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
+                                </Button>
+                            </Link>
                         </div>
                     </AnimationContainer>
                     <AnimationContainer delay={0.2} className="relative pt-28 pb-24 md:py-40 px-2 bg-transparent w-full">
@@ -68,7 +78,7 @@ const HomePage = async () => {
                                 <div className="absolute inset-0 bg-gradient-to-r from-violet-700/30 via-fuchsia-700/30 to-indigo-700/30 animate-gradient-xy"></div>
                                 <div className="absolute inset-0 bg-[linear-gradient(to_right,rgb(255,255,255,0.2)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255,255,255,0.2)_1px,transparent_1px)] bg-[size:2.5rem_2.5rem] [mask-image:radial-gradient(ellipse_90%_90%_at_50%_50%,black,transparent)]"></div>
                                 <Image
-                                    src="/assets/dashboard-dark.svg"
+                                    src="/assets/dashboard-ai.png"
                                     alt="Simplify.AI Dashboard"
                                     width={1400}
                                     height={1400}
@@ -79,6 +89,16 @@ const HomePage = async () => {
                             </div>
                             <div className="absolute -bottom-6 inset-x-0 w-full h-1/2 bg-gradient-to-t from-black via-black/90 to-transparent z-40"></div>
                             <div className="absolute bottom-0 md:-bottom-10 inset-x-0 w-full h-1/3 bg-gradient-to-t from-black via-black/95 to-transparent z-50"></div>
+                        </div>
+                        <div className="flex items-center justify-center whitespace-nowrap gap-8 z-50">
+                            <Button asChild className="px-10 py-7 text-lg bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-500 border-none shadow-xl hover:shadow-2xl hover:shadow-violet-500/30 transition-all duration-500 rounded-2xl backdrop-blur-xl hover:backdrop-blur-2xl group relative overflow-hidden">
+                                <Link href={user ? "/dashboard" : "/auth/sign-in"} className="flex items-center gap-3">
+                                    <span className="relative z-10 font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text">🚀Convert your first data to json</span>
+                                    <ArrowRightIcon className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-300" />
+                                    <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-indigo-600/20 animate-pulse"></div>
+                                    <div className="absolute -inset-x-2 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-500 to-transparent opacity-50"></div>
+                                </Link>
+                            </Button>
                         </div>
                     </AnimationContainer>
                     </div>
@@ -110,8 +130,12 @@ const HomePage = async () => {
                             </div>
                         </div>
                     </div>
+                   
                 </AnimationContainer>
             </MaxWidthWrapper>
+            <div >                       
+                <SignupFormDemo/>
+            </div>
 
             {/* Features Section */}
             <MaxWidthWrapper className="pt-10">
@@ -122,7 +146,7 @@ const HomePage = async () => {
                         <h2 className="text-center lg:text-center text-7xl md:text-7xl !leading-[1.1] font-medium font-heading bg-gradient-to-r from-gray-950/30 via-pink-700 to-blue-700 bg-clip-text text-transparent animate-gradient-x mt-6">
                             Manage Links Like a Pro
                         </h2>
-                        <p className="mt-4 text-center font-bold lg:text-center text-3xl bg-gradient-to-r from-neutral-200 to-neutral-400 bg-clip-text text-transparent max-w-lg backdrop-blur-3xl">
+                        <p className="mt-4 text-center font-bold lg:text-center text-3xl bg-gradient-to-br from-neutral-100 via-slate-300 to-gray-300/20 bg-clip-text text-transparent max-w-lg backdrop-blur-3xl">
                             Simplify.AI is a powerful link management tool that helps you shorten, track, and organize all your links in one place.
                         </p>
                     </div>
@@ -134,8 +158,10 @@ const HomePage = async () => {
                             <BentoCard key={idx} {...feature} className="backdrop-blur-xl hover:shadow-2xl hover:shadow-violet-500/20 transition-all duration-500" />
                         ))}
                     </BentoGrid>
+            
                 </AnimationContainer>
             </MaxWidthWrapper>
+            <Offerings/>
             {/* Process Section */}
             <MaxWidthWrapper className="py-10">
                 <AnimationContainer delay={0.1}>
@@ -149,6 +175,7 @@ const HomePage = async () => {
                             Manage links in 3 simple steps. Optimize, organize, and share with ease!
                         </p>
                         </div>
+                       
                 </AnimationContainer>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 w-full py-8 gap-4 md:gap-8">
                     {PROCESS.map((process, id) => (
@@ -186,8 +213,8 @@ const HomePage = async () => {
                         </p>
                     </div>
                 </AnimationContainer>
-                <AnimationContainer delay={0.2}>
-                    <PricingCards />
+                <AnimationContainer delay={0.4}>
+                    <Pricing/>
                 </AnimationContainer>
                 <AnimationContainer delay={0.3}>
                     <div className="flex flex-wrap items-start md:items-center justify-center lg:justify-evenly gap-6 mt-12 max-w-5xl mx-auto w-full">
@@ -307,17 +334,17 @@ const HomePage = async () => {
             <MaxWidthWrapper className="mt-20 max-w-[100vw] overflow-x-hidden scrollbar-hide">
                 <AnimationContainer delay={0.1}>
                     <LampContainer>
-                        <div className="flex flex-col items-center justify-center relative w-full text-center">
-                            <h2 className="text-4xl flex justify-center text-center relative md:text-4xl lg:text-7xl font-bold  w-max bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 via-blue-500 to-pink-500 py-4 mt-8 [filter:drop-shadow(0px_1px_3px_rgba(27,_37,_80,_0.14))]">
+                    <div className="flex flex-col items-center justify-center relative w-full text-center">
+                            <h2 className="text-4xl flex justify-center text-center relative md:text-4xl lg:text-7xl font-bold  w-max bg-clip-text text-transparent bg-gradient-to-br from-purple-600 via-blue-600 to-black py-4 mt-8 ">
                                 Simplify your data  <br/>
                              with the most advanced AI
                             </h2>
-                            <p className="text-white mt-6 max-w-md mx-auto">
-                                Discover the leading solution for converting data to JSON and generating top-notch content effortlessly.
+                            <p className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-b from-white  via-slate-300 to-gray-600/30">
+                                Discover the leading solution for converting <br/>data to JSON and generating top-notch content effortlessly.
                             </p>
                             <div className="mt-6">
                             <SparklesText  text=" Exciting times ahead!" />
-                                <Button className="bg-gradient-to-r from-cyan-600 via-blue-600 to-pink-600 text-white  text-xl font-semibold py-3 px-3 rounded-lg shadow-lg hover:shadow-xl transition-transform transform hover:scale-105">
+                                <Button className="bg-gradient-to-r from-cyan-500 via-blue-600 to-pink-600 text-white  text-xl font-semibold py-3 px-3 rounded-lg shadow-lg hover:shadow-xl transition-transform transform hover:scale-105">
                                     Get started for free
                                     <ArrowRightIcon className="w-4 h-4 ml-2" />
                                 </Button>

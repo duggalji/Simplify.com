@@ -27,14 +27,19 @@ export default authMiddleware({
         }
 
         // Handle authenticated routes
-        if (pathname.startsWith('/auth') && pathname !== '/auth/callback') {
+        if (pathname.startsWith('/auth')) {
+            // Don't redirect these specific auth routes
+            if (pathname === '/auth/callback') {
+                return NextResponse.next();
+            }
+            // Redirect to dashboard for all other auth routes when user is signed in
             return NextResponse.redirect(new URL('/dashboard', req.url));
         }
 
         return NextResponse.next();
     },
 });
-
+//
 export const config = {
     matcher: [
         "/((?!.+\\.[\\w]+$|_next).*)",

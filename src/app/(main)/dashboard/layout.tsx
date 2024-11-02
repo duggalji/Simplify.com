@@ -3,6 +3,9 @@ import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import {  Navbar } from "@/components";
+import { Footer } from "@/components";
+
 
 export default function DashboardLayout({
   children,
@@ -81,7 +84,9 @@ export default function DashboardLayout({
               </span>
             </button>
           </div>
+          <Footer/>
         </div>
+    
       );
     }
 

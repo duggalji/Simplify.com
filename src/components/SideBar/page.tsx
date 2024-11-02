@@ -43,12 +43,12 @@ const ModernSidebar: FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-white">
+    <div className="flex h-screen ">
       <motion.aside 
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
-        className="fixed w-64 h-screen bg-white/70 border-r border-gray-100/50 shadow-lg backdrop-blur-xl z-50"
+        className="fixed w-64 h-screen bg-white/70 border-r border-blue-800 shadow-lg backdrop-blur-xl z-50"
       >
         {/* Logo */}
         <div className="p-6 flex items-center">
@@ -129,7 +129,7 @@ const ModernSidebar: FC = () => {
           transition={{ delay: 0.5 }}
         >
           <motion.div 
-            className="p-4 rounded-xl bg-gradient-to-r from-violet-50/90 to-blue-50/90 border border-indigo-100/50 shadow-lg shadow-indigo-100/20"
+            className="p-6 rounded-xl bg-gradient-to-r from-violet-50/90 to-blue-50/90 border border-blue-800"
             whileHover={{ scale: 1.02, y: -2 }}
             transition={{ type: "spring", stiffness: 400, damping: 15 }}
           >
