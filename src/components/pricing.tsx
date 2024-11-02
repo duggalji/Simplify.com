@@ -77,11 +77,11 @@ const Pricing = () => {
             <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-gradient-to-tr from-pink-600/20 via-blue-600/10 to-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
             
             <div className="relative flex flex-col items-center justify-center max-w-3xl mx-auto z-10">
-                <div className="w-ful rounded-[2rem] backdrop-blur-3xl">
+                <div className="w-full rounded-[2rem] backdrop-blur-3xl">
                     <AnimationContainer className="flex flex-col items-center justify-center p-12">
-                        <Badge size="lg" variant="outline" className="backdrop-blur-3xl bg-gradient-to-r from-cyan-500/50 via-blue-600/60 to-pink-600/50 border-0 px-8 py-3 rounded-2xl">
+                        <Badge className="backdrop-blur-3xl bg-gradient-to-r from-cyan-500/50 via-blue-600/60 to-pink-600/50 border-0 px-8 py-3 rounded-2xl">
                             <div className="relative w-5 h-5">
-                                <Star className="absolute inset-0 text-cyan-500 animate-pulse" />
+                                <Star className="absolute inset-0 text-cyan-600 animate-pulse" />
                                 <Star className="absolute inset-0 text-blue-600 animate-pulse delay-75" />
                             </div>
                             <span className="ml-2 text-base font-medium tracking-wider text-white/90">CHOOSE YOUR PLAN</span>
