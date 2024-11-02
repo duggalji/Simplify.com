@@ -23,7 +23,7 @@ const PricingPage = () => {
                 quantity={150}
                 ease={100} 
                 color="rgba(139,92,246,0.5)"
-                refresh={5}
+
             />
             <AnimationContainer delay={0.1}>
                 <div className="flex flex-col items-center justify-center py-10 max-w-lg mx-auto relative">
