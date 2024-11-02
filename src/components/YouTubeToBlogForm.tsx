@@ -1,21 +1,38 @@
 "use client"
 import React, { useState, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardIcon, CheckIcon, EyeIcon, HeartIcon, CalendarIcon, UserIcon } from '@heroicons/react/24/outline';
+import { ClipboardIcon, CheckIcon, EyeIcon, HeartIcon, CalendarIcon, UserIcon, LinkIcon } from '@heroicons/react/24/outline';
 import Confetti from 'react-confetti';
 import { Toaster, toast } from 'react-hot-toast';
 import { YouTubeMetadata } from '@/types/youtube';
 import { fetchYouTubeMetadata } from '@/utils/youtube';
 import { z } from 'zod';
+import { useRouter } from 'next/navigation';
+import { nanoid } from 'nanoid';
+import slugify from 'slugify';
+import Link from 'next/link';
 
 interface BlogPostResponse {
   blogPost: string;
   error?: string;
+  slug?: string;
 }
 
 const youtubeUrlSchema = z.string().url().refine((url) => {
   return /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}$/.test(url);
 }, "Please enter a valid YouTube URL");
+
+const cleanGeneratedContent = (content: string): string => {
+  return content
+    .replace(/[#*`]/g, '')  // Remove markdown characters
+    .replace(/^\s*[-•]\s*/gm, '') // Remove list markers
+    .replace(/\n{3,}/g, '\n\n')  // Normalize line breaks
+    .replace(/^(#{1,6})\s/gm, '') // Remove heading markers
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
+    .replace(/\*(.*?)\*/g, '$1') // Remove italic markers
+    .replace(/^[-+*]\s/gm, '') // Remove list markers
+    .trim();
+};
 
 const YouTubeToBlogForm = (): JSX.Element => {
   const [videoUrl, setVideoUrl] = useState<string>('');
@@ -32,6 +49,9 @@ const YouTubeToBlogForm = (): JSX.Element => {
   const [metadata, setMetadata] = useState<YouTubeMetadata | null>(null);
   const [isValidUrl, setIsValidUrl] = useState<boolean>(false);
   const [loadingText, setLoadingText] = useState<string>('Generating...');
+  const router = useRouter();
+  const [blogSlug, setBlogSlug] = useState<string | null>(null);
+  const [generatedSlug, setGeneratedSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -85,90 +105,138 @@ const YouTubeToBlogForm = (): JSX.Element => {
     }
   };
 
+  const handleGenerateContent = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoUrl
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        setError(data.error);
+        toast.error(data.error);
+        return;
+      }
+
+      // Clean the content thoroughly before setting it
+      const cleanedContent = cleanGeneratedContent(data.blogPost);
+      setBlogPost(cleanedContent);
+      setGeneratedSlug(data.slug);
+      setShowConfetti(true);
+      
+      // Save to localStorage with cleaned content
+      const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
+      const newPost = {
+        id: nanoid(),
+        slug: data.slug,
+        title: metadata?.title || 'Untitled',
+        content: cleanedContent, // Use cleaned content
+        metadata: metadata,
+        createdAt: new Date().toISOString(),
+        savedBy: [],
+        followers: [],
+        pageViews: 0
+      };
+      
+      localStorage.setItem('blogPosts', JSON.stringify([...savedPosts, newPost]));
+      toast.success('Blog post generated successfully!');
+      
+    } catch (error) {
+      setError('Failed to generate blog post');
+      toast.error('Failed to generate blog post');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const formatBlogContent = (content: string): ReactNode[] => {
     return content.split('\n\n').map((block, index) => {
-      // Heading detection
-      if (block.startsWith('#')) {
-        const level = block.match(/^#+/)?.[0].length || 1;
-        const text = block.replace(/^#+\s/, '');
-        
-        const headingClasses = {
-          1: "text-6xl font-black mb-12 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600 bg-clip-text text-transparent animate-gradient tracking-tight leading-tight drop-shadow-lg hover:scale-[1.02] transform transition-all duration-500 cursor-default p-4 rounded-2xl backdrop-blur-xl border-b-4 border-purple-500/20 hover:border-purple-500/40",
-          2: "text-5xl font-extrabold mt-16 mb-8 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent tracking-tight leading-tight hover:scale-[1.02] transform transition-all duration-500 p-3 rounded-xl backdrop-blur-lg shadow-xl hover:shadow-2xl",
-          3: "text-4xl font-bold mt-12 mb-6 bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent tracking-tight leading-tight hover:scale-[1.02] transform transition-all duration-500 p-2 rounded-lg backdrop-blur-md"
-        }[level] || "text-3xl font-semibold mt-8 mb-4 bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent p-2";
-
+      // Main title (first block)
+      if (index === 0) {
         return (
-          <motion.h1 
-            key={`heading-${index}`}
+          <motion.h1
+            key={`title-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`${headingClasses} hover:translate-y-[-2px] hover:shadow-purple-500/20`}
+            className="text-5xl font-black text-gray-900 mb-12 leading-tight tracking-tight"
           >
-            {text}
+            {block}
           </motion.h1>
         );
       }
 
-      // List detection
-      if (block.match(/^[-*]\s/)) {
+      // Section headings (shorter blocks with specific endings)
+      if (block.length < 100 && (
+        block.endsWith('?') || 
+        block.includes('Introduction') || 
+        block.includes('Conclusion') ||
+        /^[A-Z][^.!?]*[:?]/.test(block)
+      )) {
         return (
-          <ul key={`list-${index}`} className="space-y-4 my-8 list-none backdrop-blur-xl bg-gradient-to-br from-white/60 to-white/90 rounded-3xl p-8 shadow-2xl border border-purple-100/50 hover:border-purple-200/50 transition-all duration-500 hover:shadow-purple-500/20 hover:scale-[1.01]">
-            {block.split('\n').map((item, i) => (
-              <motion.li
-                key={`list-item-${i}`}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="
-                  relative pl-10 text-gray-800 hover:text-gray-900
-                  before:content-[''] before:absolute before:left-0 before:top-[0.6rem]
-                  before:w-4 before:h-4 before:bg-gradient-to-br from-purple-500 to-indigo-500
-                  before:rounded-full before:shadow-xl before:transform
-                  before:transition-all before:duration-500
-                  hover:before:scale-150 hover:before:rotate-[360deg]
-                  hover:translate-x-3 transition-all duration-500
-                  text-xl font-medium tracking-wide leading-relaxed
-                  backdrop-blur-xl hover:backdrop-blur-2xl
-                  hover:bg-white/40 rounded-2xl p-4
-                  border border-transparent hover:border-purple-100/50
-                  shadow-lg hover:shadow-xl
-                "
-              >
-                {item.replace(/^[-*]\s/, '')}
-              </motion.li>
-            ))}
-          </ul>
+          <motion.h2
+            key={`section-${index}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-3xl font-bold text-gray-800 mt-16 mb-8 flex items-center gap-4 group"
+          >
+            <div className="flex-shrink-0 w-1.5 h-8 bg-gradient-to-b from-blue-500 via-pink-500 to-cyan-600 rounded-full transform origin-center group-hover:scale-y-125 transition-transform duration-300"/>
+            {block}
+          </motion.h2>
         );
       }
 
-      // Regular paragraph
+      // List items (shorter blocks starting with common list indicators)
+      if (block.length < 200 && /^[•\-–—]|\d+\./.test(block)) {
+        return (
+          <motion.div
+            key={`list-${index}`}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="flex items-start gap-4 my-6 pl-4 group"
+          >
+            <span className="flex-shrink-0 w-2 h-2 mt-3 rounded-full bg-purple-600/60 group-hover:bg-purple-600 transition-colors duration-300"/>
+            <span className="text-lg text-gray-700 leading-relaxed">
+              {block.replace(/^[•\-–—]\s*|\d+\.\s*/, '')}
+            </span>
+          </motion.div>
+        );
+      }
+
+      // Regular paragraphs
       return (
         <motion.p
           key={`paragraph-${index}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: index * 0.1 }}
-          className="
-            text-gray-800 text-xl leading-loose my-8
-            hover:text-blue-500 transition-colors duration-500
-            first-letter:text-6xl first-letter:font-black
-            first-letter:text-transparent first-letter:bg-clip-text
-            first-letter:bg-gradient-to-br first-letter:from-blue-600 first-letter:to-pink-600
-            first-letter:mr-3 first-letter:float-left first-letter:leading-none
-            tracking-wide font-medium backdrop-blur-xl
-            hover:backdrop-blur-2xl p-6 rounded-2xl
-            hover:bg-white/50
-            border border-purple-100/30 hover:border-purple-200/50
-            shadow-xl hover:shadow-2xl hover:-translate-y-1
-            selection:bg-purple-200 selection:text-purple-900
-            hover:scale-[1.01] transform
-          "
+          className="text-lg text-gray-700 leading-relaxed my-8 
+            first-letter:text-4xl first-letter:font-bold first-letter:text-gray-900
+            first-letter:mr-3 first-letter:float-left first-letter:leading-3"
         >
           {block}
         </motion.p>
       );
     });
+  };
+
+  const generateUniqueSlug = (title: string): string => {
+    const uniqueId = nanoid(8);
+    const baseSlug = slugify(title, {
+      lower: true,
+      strict: true,
+      trim: true,
+      replacement: '-'
+    });
+    return `${baseSlug}-${uniqueId}`;
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -178,6 +246,7 @@ const YouTubeToBlogForm = (): JSX.Element => {
     setError(null);
     setBlogPost(null);
     setMetadata(null);
+    setGeneratedSlug(null);
 
     try {
       const response = await fetch('/api/generateBlogPost', {
@@ -189,11 +258,29 @@ const YouTubeToBlogForm = (): JSX.Element => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate blog post');
+        throw new Error(data.error || 'Failed to generate blog post...we r sorry');
       }
 
       setBlogPost(data.blogPost);
       setMetadata(data.metadata);
+
+      if (data.metadata?.title) {
+        const slug = generateUniqueSlug(data.metadata.title);
+        setGeneratedSlug(slug);
+
+        const blogData = {
+          id: nanoid(),
+          slug,
+          title: data.metadata.title,
+          content: data.blogPost,
+          metadata: data.metadata,
+          createdAt: new Date().toISOString(),
+        };
+
+        const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
+        localStorage.setItem('blogPosts', JSON.stringify([...savedPosts, blogData]));
+      }
+
       toast.success('Blog post generated successfully!');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -221,6 +308,34 @@ const YouTubeToBlogForm = (): JSX.Element => {
     }
   };
 
+  const handleGetUrl = () => {
+    if (generatedSlug) {
+      const currentPath = window.location.pathname;
+      router.push(`${currentPath}/${generatedSlug}`);
+    }
+  };
+
+  const copyBlogUrl = async () => {
+    if (generatedSlug) {
+      const baseUrl = window.location.origin;
+      const blogUrl = `${baseUrl}/dashboard/youtube-blogs/${generatedSlug}`;
+      
+      try {
+        await navigator.clipboard.writeText(blogUrl);
+        toast.success('Blog URL copied to clipboard!', {
+          icon: '🔗',
+          style: {
+            background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+            color: 'white',
+            borderRadius: '1rem',
+          },
+        });
+      } catch (error) {
+        toast.error('Failed to copy URL');
+      }
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <Toaster position="top-center" />
@@ -228,13 +343,13 @@ const YouTubeToBlogForm = (): JSX.Element => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-gray-100/50 hover:shadow-purple-500/20 transition-all duration-500"
+        className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-blue-800/60 hover:shadow-purple-500/20 transition-all duration-500"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
+        <div>
             <label 
               htmlFor="videoUrl" 
-              className="block text-lg font-semibold text-gray-700 mb-3 bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent"
+              className="block text-lg font-semibold text-gray-800 mb-3 bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent"
             >
               YouTube Video URL
             </label>
@@ -294,7 +409,7 @@ const YouTubeToBlogForm = (): JSX.Element => {
               ) : (
                 <span className="
                   bg-clip-text text-transparent 
-                  bg-gradient-to-r from-pink-100 via-cyan-100 to-blue-200
+                  bg-gradient-to-r from-pink-700 via-cyan-100 to-blue-200
                   animate-gradient-text
                   group-hover:from-pink-100 group-hover:via-cyan-100 group-hover:to-blue-200
                 ">
@@ -311,12 +426,12 @@ const YouTubeToBlogForm = (): JSX.Element => {
           <div className="mt-8">
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
               <div
-                className="h-full bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500
+                className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-pink-500
                          transition-all duration-500 ease-out animate-pulse"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-base text-gray-600 mt-3 text-center font-medium">
+            <p className="text-base text-gray-500 mt-3 text-center font-medium">
               {progress}% complete
             </p>
           </div>
@@ -340,149 +455,127 @@ const YouTubeToBlogForm = (): JSX.Element => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="
-              bg-white/90 backdrop-blur-2xl
-              rounded-3xl shadow-2xl
-              hover:shadow-purple-500/20
-              transition-all duration-500
-              overflow-hidden border border-gray-100/50
-              hover:scale-[1.01] transform
-            "
+            className="bg-white rounded-3xl shadow-lg overflow-hidden"
           >
-            <div className="
-              flex justify-between items-center
-              px-10 py-8 border-b border-gray-100/50
-              bg-gradient-to-r from-violet-50/80 via-white/80 to-indigo-50/80
-              backdrop-blur-xl
-            ">
-              <h2 className="
-                text-4xl font-black
-                bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600
-                bg-clip-text text-transparent
-                animate-gradient tracking-tight
-                hover:scale-[1.02] transform transition-all duration-300
-              ">
+            <div className="flex justify-between items-center px-8 py-6 border-b">
+              <h2 className="text-2xl font-bold text-gray-900">
                 Generated Blog Post
               </h2>
-              <div className="relative">
+              <div className="flex space-x-4">
                 <motion.button
                   onClick={copyToClipboard}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   className={`
-                    flex items-center space-x-3 px-6 py-3 rounded-xl
-                    transition-all duration-300 shadow-xl
-                    ${copied 
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600' 
-                      : 'bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600'
-                    }
-                    font-bold text-lg border border-white/20 backdrop-blur-sm
-                    hover:shadow-2xl hover:shadow-purple-500/20
+                    flex items-center space-x-2 px-4 py-2 rounded-lg
+                    ${copied ? 'bg-green-500' : 'bg-cyan-600'} 
+                    text-white font-medium transition-colors
                   `}
                 >
                   {copied ? (
-                    <CheckIcon className="h-6 w-6 text-white" />
+                    <CheckIcon className="h-5 w-5" />
                   ) : (
-                    <ClipboardIcon className="h-6 w-6 text-white" />
+                    <ClipboardIcon className="h-5 w-5" />
                   )}
-                  <span className="text-white">
-                    {copied ? 'Copied!' : 'Copy to clipboard'}
-                  </span>
+                  <span>{copied ? 'Copied!' : 'Copy'}</span>
                 </motion.button>
-                {showConfetti && (
-                  <Confetti
-                    width={windowSize.width}
-                    height={windowSize.height}
-                    recycle={false}
-                    numberOfPieces={200}
-                    gravity={0.3}
-                    colors={['#8B5CF6', '#6366F1', '#4F46E5', '#7C3AED']}
-                    style={{
-                      position: 'fixed',
-                      top: 0,
-                      left: 0,
-                      zIndex: 1000,
-                    }}
-                  />
-                )}
+
+                <motion.button
+                  onClick={copyBlogUrl}
+                  whileHover={{ 
+                    scale: 1.05,
+                    boxShadow: "0 0 20px rgba(124, 58, 237, 0.5)"
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  className="
+                    flex items-center space-x-2 px-4 py-2 rounded-lg
+                    bg-gradient-to-r from-indigo-600 via-purple-600 to-purple-700
+                    hover:from-indigo-700 hover:via-purple-700 hover:to-purple-800
+                    text-white font-medium
+                    transition-all duration-300
+                    border border-purple-400/30
+                    shadow-lg shadow-purple-500/30
+                    backdrop-blur-sm
+                    relative overflow-hidden
+                    group
+                  "
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 via-fuchsia-500/20 to-pink-500/20 blur-xl group-hover:opacity-75 transition-opacity duration-300" />
+                  <LinkIcon className="h-5 w-5 relative z-10 animate-pulse" />
+                  <span className="relative z-10">Copy URL</span>
+                  <div className="absolute -inset-px bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300 blur-xl" />
+                </motion.button>
+
+                <motion.button
+                  onClick={handleGetUrl}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium"
+                >
+                  <LinkIcon className="h-5 w-5" />
+                  <span>View Blog</span>
+                </motion.button>
               </div>
             </div>
             
             {metadata && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="relative"
-              >
-                {/* Thumbnail */}
-                <div className="relative w-full h-[400px] overflow-hidden">
-                  <img 
-                    src={metadata.thumbnail}
-                    alt={metadata.title}
-                    className="w-full h-full object-cover rounded-t-none rounded-b-3xl"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
-                  
-                  {/* Video Info Overlay */}
+              <div className="relative h-[400px]">
+                <img 
+                  src={metadata.thumbnail}
+                  alt={metadata.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent">
                   <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="space-y-4"
-                    >
-                      <h1 className="text-4xl font-black tracking-tight text-white drop-shadow-lg">
-                        {metadata.title}
-                      </h1>
-                      <div className="flex items-center space-x-6">
-                        <div className="flex items-center space-x-2">
-                          <EyeIcon className="h-5 w-5 text-white/90" />
-                          <span className="text-white/90 font-medium">{metadata.views} views</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <HeartIcon className="h-5 w-5 text-white/90" />
-                          <span className="text-white/90 font-medium">{metadata.likes} likes</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <CalendarIcon className="h-5 w-5 text-white/90" />
-                          <span className="text-white/90 font-medium">{metadata.publishedAt}</span>
-                        </div>
+                    <h1 className="text-3xl font-bold mb-4">{metadata.title}</h1>
+                    <div className="flex items-center space-x-6 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <EyeIcon className="h-4 w-4" />
+                        <span>{metadata.views} views</span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <UserIcon className="h-5 w-5 text-white/90" />
-                        <span className="text-white/90 font-medium">{metadata.channelTitle}</span>
+                        <HeartIcon className="h-4 w-4" />
+                        <span>{metadata.likes} likes</span>
                       </div>
-                    </motion.div>
+                      <div className="flex items-center space-x-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        <span>{metadata.publishedAt}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <UserIcon className="h-4 w-4" />
+                        <span>{metadata.channelTitle}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
             
-            <article className="
-              prose prose-2xl max-w-none px-12 py-10
-              bg-gradient-to-b from-white/95 to-gray-50/95
-              rounded-3xl shadow-2xl border border-purple-100/50
-              backdrop-blur-2xl hover:shadow-purple-500/30
-              transition-all duration-500 hover:scale-[1.005]
-              prose-headings:font-black prose-headings:tracking-tight
-              prose-p:text-gray-700 prose-p:leading-relaxed prose-p:text-xl
-              prose-a:text-purple-600 prose-a:font-semibold prose-a:no-underline
-              hover:prose-a:text-purple-500 hover:prose-a:underline
-              prose-strong:text-purple-700 prose-strong:font-extrabold
-              prose-code:text-purple-600 prose-code:bg-purple-50/80
-              prose-pre:bg-gray-900 prose-pre:text-gray-100
-              prose-ol:list-decimal prose-ul:list-disc
-              prose-li:text-lg prose-li:leading-relaxed
-              selection:bg-purple-100 selection:text-purple-900
-              hover:prose-headings:text-purple-900
-              prose-img:rounded-2xl prose-img:shadow-xl
-              space-y-8
-            ">
-              {formatBlogContent(blogPost)}
+            <article className="px-8 py-12 max-w-4xl mx-auto">
+              <div className="space-y-6 [&>*:first-child]:mt-0">
+                {formatBlogContent(blogPost)}
+              </div>
             </article>
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {showConfetti && (
+        <Confetti
+          width={windowSize.width}
+          height={windowSize.height}
+          recycle={false}
+          numberOfPieces={200}
+          gravity={0.3}
+          colors={['#8B5CF6', '#6366F1', '#4F46E5', '#7C3AED']}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            zIndex: 1000,
+          }}
+        />
+      )}
     </div>
   );
 };

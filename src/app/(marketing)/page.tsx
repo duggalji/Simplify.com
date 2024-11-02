@@ -1,3 +1,5 @@
+
+
 import { AnimationContainer, MaxWidthWrapper, PricingCards } from "@/components";
 import { BentoCard, BentoGrid, CARDS } from "@/components/ui/bento-grid";
 import { BorderBeam } from "@/components/ui/border-beam";
@@ -11,25 +13,28 @@ import SparklesText from "@/components/ui/sparkles-text";
 import { COMPANIES, PROCESS } from "@/utils";
 import { REVIEWS } from "@/utils/constants/misc";
 import { currentUser } from "@clerk/nextjs/server";
-import { ArrowRightIcon, ArrowRight,CreditCardIcon, StarIcon } from "lucide-react";
+import { ArrowRightIcon, ArrowRight, CreditCardIcon, StarIcon, BarChart3, VideoIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { AiTabs } from "@/components/tabs";
 import { SignupFormDemo } from "@/components/ui-form";
 import Pricing from "@/components/pricing";
 import Offerings from "@/components/offerings";
+import Particles from "@/components/ui/particles";
+import { HeroVideoDialog } from "@/components/video-ai";
+import { VideoDialog } from "@/components/video-dialog";
+
 
 const HomePage = async () => {
-
     const user = await currentUser();
 
     return (
-        <div className="overflow-x-hidden scrollbar-hide size-full ">
+        <div className="overflow-x-hidden scrollbar-hide size-full">
             {/* Hero Section */}
             <MaxWidthWrapper>
-            <Meteors number={30} />
+                <Meteors number={30} />
                 <div className="flex flex-col items-center justify-center w-full text-center bg-gradient-to-t from-black relative">
-                    <SparklesText className="bg-gradient-to-r from-emerald-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent " text="Magic UI" />
+                    <SparklesText className="bg-gradient-to-r from-emerald-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent" text="Magic UI" />
                     <AnimationContainer className="flex flex-col items-center justify-center w-full text-center">
                         <button className="group relative grid overflow-hidden rounded-full px-8 py-3 shadow-[0_0_25px_rgba(139,92,246,0.3)] bg-gradient-to-r from-violet-600/30 to-indigo-600/30 backdrop-blur-2xl hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all duration-500 border border-violet-500/20">
                             <span className="z-10 py-0.5 text-sm text-neutral-50 flex items-center justify-center gap-2 font-medium tracking-wider">
@@ -43,9 +48,8 @@ const HomePage = async () => {
                             <span className="bg-gradient-to-r from-emerald-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent animate-gradient-y [text-shadow:0_0_80px_rgba(59,130,246,0.5)]">
                                 With AI Magic
                             </span>
-                          
                         </h1>
-                       
+                        
                         <p className="mb-14 text-xl tracking-tight text-neutral-100 md:text-2xl max-w-3xl mx-auto font-light">
                             #1 AI-Powered JSON Converter & Content Generator
                             <br className="hidden md:block" />
@@ -99,11 +103,11 @@ const HomePage = async () => {
                                     <div className="absolute -inset-x-2 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-500 to-transparent opacity-50"></div>
                                 </Link>
                             </Button>
-                        </div>
+                            </div>
                     </AnimationContainer>
                     </div>
             </MaxWidthWrapper>
-            {/* Companies Section */}
+       
             <MaxWidthWrapper>
                 <AnimationContainer delay={0.4}>
                     <div className="py-14 relative">
@@ -130,35 +134,59 @@ const HomePage = async () => {
                             </div>
                         </div>
                     </div>
+                
                    
                 </AnimationContainer>
+       
             </MaxWidthWrapper>
-            <div >                       
-                <SignupFormDemo/>
-            </div>
-
+           
+            <VideoDialog/>
             {/* Features Section */}
             <MaxWidthWrapper className="pt-10">
                 <AnimationContainer delay={0.1}>
-                    <div className="flex flex-col w-full items-center lg:items-center justify-center py-8 relative">
-                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 via-fuchsia-600/10 to-cyan-600/10 blur-3xl"></div>
-                        <MagicBadge title="Features" />
-                        <h2 className="text-center lg:text-center text-7xl md:text-7xl !leading-[1.1] font-medium font-heading bg-gradient-to-r from-gray-950/30 via-pink-700 to-blue-700 bg-clip-text text-transparent animate-gradient-x mt-6">
-                            Manage Links Like a Pro
-                        </h2>
-                        <p className="mt-4 text-center font-bold lg:text-center text-3xl bg-gradient-to-br from-neutral-100 via-slate-300 to-gray-300/20 bg-clip-text text-transparent max-w-lg backdrop-blur-3xl">
-                            Simplify.AI is a powerful link management tool that helps you shorten, track, and organize all your links in one place.
-                        </p>
-                    </div>
+                    <div className="flex flex-col w-full items-center lg:items-center justify-center py-12 relative overflow-hidden">
+                        {/* Multi-layered animated gradients for ultra-modern effect */}
+                     
+                        <div
+                          className="relative z-10"
+                        >
+                          <MagicBadge title="Features" />
+                        </div>
+
+                        <div 
+                          className="text-center lg:text-center text-8xl md:text-8xl !leading-[1.1] font-bold font-heading bg-gradient-to-b from-white/80 via-neutral-200 to-gray-200/20 bg-clip-text text-transparent animate-gradient-x mt-6 hover:scale-105 transition-transform duration-500 relative z-10"
+                        >
+                            Manage Links <br/>Like a Pro
+                        </div>
+
+                        <div 
+                          className="mt-6 text-center font-bold lg:text-center text-2xl bg-gradient-to-br from-white/60 to-neutral-500 bg-clip-text text-transparent max-w-lg backdrop-blur-3xl relative z-10 hover:scale-105 transition-transform duration-500"
+                        >
+                            Simplify.AI The #1 most advanced AI content generator and data converter to JSON in seconds!
+                        </div>
+
+                        </div>
                 </AnimationContainer>
                 <AnimationContainer delay={0.2}>
                     <BentoGrid className="py-8 relative">
-                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 via-fuchsia-600/5 to-cyan-600/5 animate-pulse blur-2xl"></div>
+                        {/* Multi-layered ultra-modern gradient borders and effects */}
+                        <div className="absolute -inset-4 bg-gradient-to-r from-violet-900/30 via-fuchsia-800/30 to-cyan-900/30 blur-3xl animate-pulse"></div>
+                        <div className="absolute -inset-2 bg-gradient-conic from-indigo-900/40 via-purple-800/40 to-blue-900/40 animate-spin-slow blur-2xl"></div>
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-cyan-600/20 animate-pulse"></div>
+                        <div className="absolute -inset-1 bg-gradient-radial from-violet-500/30 via-transparent to-transparent animate-pulse"></div>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.1),transparent_100%)] animate-pulse"></div>
+                        
+                        {/* Animated border glow */}
+                        <div className="absolute inset-0 border border-violet-900/50 rounded-xl shadow-[0_0_50px_rgba(139,92,246,0.5)] animate-border-glow"></div>
+                        
                         {CARDS.map((feature, idx) => (
-                            <BentoCard key={idx} {...feature} className="backdrop-blur-xl hover:shadow-2xl hover:shadow-violet-500/20 transition-all duration-500" />
+                            <BentoCard 
+                                key={idx} 
+                                {...feature} 
+                                className="backdrop-blur-xl hover:shadow-[0_0_70px_rgba(139,92,246,0.7)] hover:scale-[1.02] transition-all duration-500 border border-violet-500/20 relative overflow-hidden group"
+                            />
                         ))}
                     </BentoGrid>
-            
                 </AnimationContainer>
             </MaxWidthWrapper>
             <Offerings/>
@@ -167,39 +195,59 @@ const HomePage = async () => {
                 <AnimationContainer delay={0.1}>
                     <div className="flex flex-col items-center lg:items-center justify-center w-full py-8 max-w-xl mx-auto">
                         <MagicBadge title="The Process" />
-                        <h2 className="text-center lg:text-center text-5xl font-extrabold text-transparent mt-6 bg-gradient-to-r from-purple-600 via-pink-500 to-blue-600 bg-clip-text animate-gradient-x">
+                        <h2 className="text-center lg:text-center text-6xl font-extrabold text-transparent mt-6 bg-gradient-to-r from-blue-600 to-slate-800 bg-clip-text animate-gradient-x">
                             Simplify.AI<br/>
                             The Ultimate AI Data Converter
                         </h2>
-                        <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-                            Manage links in 3 simple steps. Optimize, organize, and share with ease!
+                        <p className="mt-4 text-center lg:text-center text-lg font-medium text-white/60 max-w-lg">
+                            Experience the power of simplify.ai, the ultra-advanced AI content generator and data to JSON converter, transforming your workflow in seconds!
                         </p>
                         </div>
+                        </AnimationContainer>
                        
-                </AnimationContainer>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 w-full py-8 gap-4 md:gap-8">
-                    {PROCESS.map((process, id) => (
+                    {[
+                        {
+                            icon: <CreditCardIcon className="w-10 h-10 text-foreground" />,
+                            title: "Advanced AI Email Campaigns",
+                            description: "Supercharge your outreach with our cutting-edge AI that crafts personalized emails in seconds!"
+                        },
+                        {
+                            icon: <BarChart3 className="w-10 h-10 text-foreground" />,
+                            title: "Convert Any Excel File to Get Predictive Analytics",
+                            description: "Transform your spreadsheets into powerful insights and forecasts effortlessly!"
+                        },
+                        {
+                            icon: <VideoIcon className="w-10 h-10 text-foreground" />,
+                            title: "Our Most Advanced AI Model",
+                            description: "Convert your favorite videos into engaging blogs in seconds—effortless content creation at its best!"
+                        }
+                    ].map((item, id) => (
                         <AnimationContainer delay={0.2 * id} key={id}>
-                            <MagicCard className="group md:py-8 backdrop-blur-xl hover:shadow-2xl hover:shadow-violet-500/20 transition-all duration-500">
-                                <div className="flex flex-col items-start justify-center w-full">
-                                    <process.icon strokeWidth={1.5} className="w-10 h-10 text-foreground" />
-                                    <div className="flex flex-col relative items-start">
-                                        <span className="absolute -top-6 right-0 border-2 border-border text-foreground font-medium text-2xl rounded-full w-12 h-12 flex items-center justify-center pt-0.5">
-                                            {id + 1}
-                                        </span>
-                                        <h3 className="text-base mt-6 font-medium text-foreground">
-                                            {process.title.replace(/linkify/g, 'simplify.AI')}
-                                        </h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">
-                                            {process.description}
-                                        </p>
+                            <a href="/dashboard">
+                                <MagicCard className="group md:py-8 backdrop-blur-xl hover:shadow-2xl hover:shadow-violet-500/20 transition-all duration-500">
+                                    <div className="flex flex-col items-start justify-center w-full">
+                                        {item.icon}
+                                        <div className="flex flex-col relative items-start">
+                                            <span className="absolute -top-6 right-0 border-2 border-border text-foreground font-medium text-2xl rounded-full w-12 h-12 flex items-center justify-center pt-0.5">
+                                                {id + 1}
+                                            </span>
+                                            <h3 className="text-base mt-6 font-medium text-foreground">
+                                                {item.title}
+                                            </h3>
+                                            <p className="mt-2 text-sm text-muted-foreground">
+                                                {item.description}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            </MagicCard>
+                                </MagicCard>
+                            </a>
                         </AnimationContainer>
                     ))}
+
+                   
                 </div>
-            </MaxWidthWrapper>
+                </MaxWidthWrapper>
             {/* Pricing Section */}
             <MaxWidthWrapper className="py-10">
                 <AnimationContainer delay={0.1}>
@@ -243,6 +291,7 @@ const HomePage = async () => {
                         </p>
                     </div>
                 </AnimationContainer>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 place-items-start gap-4 md:gap-8 py-10">
                     <div className="flex flex-col items-start h-min gap-6">
                         {REVIEWS.slice(0, 3).map((review, index) => (
@@ -330,6 +379,9 @@ const HomePage = async () => {
                     </div>
                 </div>
             </MaxWidthWrapper>
+            <div >                       
+                <SignupFormDemo/>
+            </div>
             {/* CTA Section */}
             <MaxWidthWrapper className="mt-20 max-w-[100vw] overflow-x-hidden scrollbar-hide">
                 <AnimationContainer delay={0.1}>

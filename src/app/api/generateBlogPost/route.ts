@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import fetchYouTubeTranscript from '@/utils/fetchYouTubeTranscript';
-import { summarizeWithGemini } from '@/services/gemini';
+import { summarizeWithGemini} from '@/services/gemini';
 
 interface YouTubeMetadata {
   thumbnail: string;

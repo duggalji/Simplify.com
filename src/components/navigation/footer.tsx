@@ -1,8 +1,33 @@
+"use client"
+
 import Image from 'next/image';
 import { Heart, Twitter, Instagram, Youtube, Github } from 'lucide-react';
 import Link from 'next/link';
+import AnimationContainer from '../global/animation-container';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from 'react';
 
 const Footer = () => {
+    const { toast } = useToast();
+    const [email, setEmail] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!email) return;
+
+        toast({
+            title: "🎉 Successfully subscribed!",
+            description: "Welcome to our newsletter family! Stay tuned for amazing updates.",
+            className: "bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-white/10 backdrop-blur-md",
+            duration: 5000,
+        });
+
+        setEmail('');
+    };
+
     return (
         <footer className="flex flex-col relative items-center justify-center border-t border-border pt-16 pb-8 px-6 lg:px-8 w-full max-w-6xl mx-auto lg:pt-32">
 
@@ -152,23 +177,55 @@ const Footer = () => {
 
         
             </div>
+            <AnimationContainer delay={0.5} className="w-full">
+            <div className="border-t border-border/40 mt-16 md:mt-20 lg:mt-24 lg:flex lg:items-center lg:justify-between w-full pt-8">
+                <div className="flex flex-col items-start">
+                    <h3 className="text-foreground font-medium">
+                        Subscribe to our newsletter
+                    </h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Get the latest news and updates about our product.
+                    </p>
+                </div>
+                <div className="relative flex mt-4 lg:mt-0">
+                    <form onSubmit={handleSubmit} className="flex items-center relative">
+                        <Input
+                            required
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            spellCheck={false}
+                            placeholder="Email address"
+                            className="text-sm text-foreground focus:outline-none outline-none focus:border-primary bg-background/50 min-w-[300px] border border-white/10 backdrop-blur-md"
+                        />
+                        <Button 
+                            type="submit" 
+                            className="ml-2 px-6 bg-gradient-to-r from-blue-500 via-black to-blue-800 hover:from-blue-800 hover:to-pink-800 text-white shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
+                        >
+                            Subscribe
+                        </Button>
+                    </form>
+                </div>
+            </div>
+        </AnimationContainer>
+
 
             <div className="mt-8 border-t border-border/40 pt-4 md:pt-8 md:flex md:items-center md:justify-between w-full">
-                <p className="text-lg bg-gradient-to-r from-white to-slate-200 via-gray-300/20 bg-clip-text text-transparent mt-8 md:mt-0">
-                    &copy; {new Date().getFullYear()} Simplify AI INC. All rights reserved.
-                </p>
+            <p className="text-xl bg-gradient-to-b from-white via-neutral-100 to-slate-200/20 bg-clip-text text-transparent font-medium mt-8 md:mt-0">
+            &copy; {new Date().getFullYear()} Simplify AI INC. All<br /> rights reserved.
+        </p>
                 <div className="flex gap-5 mt-4 md:mt-0">
                 <Link href="https://github.com/harshitduggal1" className="smooth-transition">
-                <Github className="w-5 h-5 text-white/90 hover:text-blue-800 transition cursor-pointer" />
+                <Github className="w-8 h-8 text-gray-400 hover:text-blue-800 transition cursor-pointer" />
             </Link>
                     <Link href="https://twitter.com/harshitduggal5" className="smooth-transition">
-                        <Twitter className="w-5 h-5 text-white/90 hover:text-blue-800 transition cursor-pointer" />
+                        <Twitter className="w-8 h-8 text-gray-400 hover:text-blue-800 transition cursor-pointer" />
                     </Link>
                     <Link href="https://instagram.com/harshitduggal5" className="smooth-transition">
-                        <Instagram className="w-5 h-5 text-white/90 hover:text-blue-800 transition cursor-pointer" />
+                        <Instagram className="w-8 h-8 text-gray-400 hover:text-blue-800 transition cursor-pointer" />
                     </Link>
                     <Link href="https://youtube.com/harshitduggal5" className="smooth-transition">
-                        <Youtube className="w-5 h-5 text-white/90 hover:text-blue-800 transition cursor-pointer" />
+                        <Youtube className="w-8 h-8 text-gray-400 hover:text-blue-800 transition cursor-pointer" />
                     </Link>
                    
                 </div>

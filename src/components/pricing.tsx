@@ -72,9 +72,6 @@ const Pricing = () => {
 
     return (
         <div className="relative flex flex-col items-center justify-center max-w-7xl py-32 mx-auto overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black"></div>
-            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-cyan-500/20 via-blue-600/10 to-pink-600/20 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-gradient-to-tr from-pink-600/20 via-blue-600/10 to-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
             
             <div className="relative flex flex-col items-center justify-center max-w-3xl mx-auto z-10">
                 <div className="w-full rounded-[2rem] backdrop-blur-3xl">

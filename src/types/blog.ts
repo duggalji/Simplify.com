@@ -130,4 +130,23 @@ export interface Post {
   };
   ogImage?: string;
   status?: 'published' | 'draft';
+}
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  metadata: {
+    videoUrl: string;
+    thumbnail: string;
+    views: number;
+    likes: number;
+    publishedAt: string;
+    channelTitle: string;
+  };
+  createdAt: Date;
+  savedBy: string[];
+  followers: string[];
+  pageViews: number;
 } 
