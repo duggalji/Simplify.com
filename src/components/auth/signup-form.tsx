@@ -112,18 +112,17 @@ const SignUpForm = () => {
             setIsLoading(false);
         }
     };
-
     return isVerifying ? (
         <div className="flex flex-col items-start w-full text-start gap-y-6 py-8 px-0.5">
-            <h2 className="text-2xl font-semibold">
+            <h2 className="text-2xl font-semibold bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient">
                 Verify your account
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-lg font-bold  bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">
                 To continue, please enter the 6-digit verification code we just sent to {email}.
             </p>
             <form onSubmit={handleVerifyEmail} className="w-full">
                 <div className="space-y-2 w-full pl-0.5">
-                    <Label htmlFor="code">
+                    <Label htmlFor="code" className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent text-xl font-medium">
                         Verification code
                     </Label>
                     <InputOTP
@@ -152,7 +151,7 @@ const SignUpForm = () => {
                         className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 transition-all duration-300 ease-in-out shadow-lg glow-effect"
                     >
                         {isLoading ? (
-                            <span className="animate-pulse">Please wait while you&apos;re proceeding...</span>
+                            <span className="animate-pulse">Please wait while you&apos;re proceeding🚀✅...</span>
                         ) : "Verify code"}
                     </Button>
                 </div>
@@ -176,9 +175,12 @@ const SignUpForm = () => {
         </div>
     ) : (
         <div className="flex flex-col items-start gap-y-6 py-8 w-full px-0.5">
-            <h2 className="text-2xl  text-white font-semibold">
+        <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white  via-slate-300 to-gray-600/30">
                 Create an account
             </h2>
+            <div className="flex justify-center item-center text-3xl ">
+      😍
+      </div>
 
             <form onSubmit={handleSignUp} className="w-full">
                 <div className="space-y-2 w-full">

@@ -77,7 +77,7 @@ const SignInForm = () => {
 
     return (
         <div className="flex flex-col items-start gap-y-6 py-8 w-full px-0.5">
-            <h2 className="text-2xl font-semibold">
+            <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white  via-slate-300 to-gray-600/30">
                 Sign in to Simplify.AI
             </h2>
 
@@ -92,7 +92,7 @@ const SignInForm = () => {
                         value={email}
                         disabled={!isLoaded || isLoading}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter your email"
+                        placeholder="Enter your email✨"
                         className="w-full focus-visible:border-foreground"
                     />
                 </div>
