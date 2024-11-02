@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { db } from "@/lib/prisma";
+import { currentUser } from "@clerk/nextjs/server";
+
+// Add middleware to check authentication
+async function authenticateUser() {
+  const user = await currentUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+  return user;
+}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    let clerkId;
-    try {
-      const { userId } = await auth();
-      clerkId = userId;
-    } catch (authError) {
-      console.error('Auth error:', authError);
-      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
-    }
-
-    if (!clerkId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Use the new authentication method
+    const clerkUser = await authenticateUser();
+    const clerkId = clerkUser.id;
 
     let user;
     try {
-      user = await prisma.user.upsert({
+      user = await db.user.upsert({
         where: { clerkId },
         update: {},
         create: { clerkId },
@@ -35,10 +35,10 @@ export async function GET(req: NextRequest) {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-//
-try {
+
+    try {
       const [allTimeMetrics, todayMetrics] = await Promise.all([
-        prisma.conversionMetric.aggregate({
+        db.conversionMetric.aggregate({
           where: { 
             userId: user.id, 
             createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } 
@@ -51,7 +51,7 @@ try {
           },
           _sum: { contentSize: true, apiCalls: true }
         }),
-        prisma.conversionMetric.count({ 
+        db.conversionMetric.count({ 
           where: { 
             userId: user.id, 
             createdAt: { gte: today } 
@@ -126,16 +126,13 @@ try {
 
 export async function POST(req: NextRequest) {
   try {
-    let clerkId;
-    try {
-      const { userId } = await auth();
-      clerkId = userId;
-    } catch (authError) {
-      console.error('Auth error:', authError);
-      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
-    }
+    // Use the new authentication method
+    const clerkUser = await authenticateUser();
+    const clerkId = clerkUser.id;
 
-    const user = await prisma.user.findUnique({ where: { clerkId: clerkId ?? undefined } });
+    const user = await db.user.findUnique({ 
+      where: { clerkId } 
+    });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -155,7 +152,7 @@ export async function POST(req: NextRequest) {
     const compressionRatio = calculateCompressionRatio(contentSize, outputSize);
     const performanceMetrics = calculatePerformanceMetrics(processingTime, complexityScore);
 
-    const metric = await prisma.conversionMetric.create({
+    const metric = await db.conversionMetric.create({
       data: {
         userId: user.id,
         contentSize,

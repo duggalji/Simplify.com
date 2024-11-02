@@ -6,11 +6,16 @@ import Confetti from 'react-confetti';
 import { Toaster, toast } from 'react-hot-toast';
 import { YouTubeMetadata } from '@/types/youtube';
 import { fetchYouTubeMetadata } from '@/utils/youtube';
+import { z } from 'zod';
 
 interface BlogPostResponse {
   blogPost: string;
   error?: string;
 }
+
+const youtubeUrlSchema = z.string().url().refine((url) => {
+  return /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}$/.test(url);
+}, "Please enter a valid YouTube URL");
 
 const YouTubeToBlogForm = (): JSX.Element => {
   const [videoUrl, setVideoUrl] = useState<string>('');
@@ -25,6 +30,8 @@ const YouTubeToBlogForm = (): JSX.Element => {
     height: typeof window !== 'undefined' ? window.innerHeight : 0
   });
   const [metadata, setMetadata] = useState<YouTubeMetadata | null>(null);
+  const [isValidUrl, setIsValidUrl] = useState<boolean>(false);
+  const [loadingText, setLoadingText] = useState<string>('Generating...');
 
   useEffect(() => {
     const handleResize = () => {
@@ -48,6 +55,35 @@ const YouTubeToBlogForm = (): JSX.Element => {
       setProgress(0);
     }
   }, [isLoading]);
+
+  useEffect(() => {
+    if (isLoading) {
+      const texts = [
+        "✨ AI is crafting your blog...",
+        "🎥 Analyzing your video...",
+        "🪄 Sprinkling some magic...",
+        "📝 Almost there...",
+        "🎨 Adding final touches..."
+      ];
+      let index = 0;
+      const interval = setInterval(() => {
+        setLoadingText(texts[index % texts.length]);
+        index++;
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoading]);
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value;
+    setVideoUrl(url);
+    try {
+      youtubeUrlSchema.parse(url);
+      setIsValidUrl(true);
+    } catch {
+      setIsValidUrl(false);
+    }
+  };
 
   const formatBlogContent = (content: string): ReactNode[] => {
     return content.split('\n\n').map((block, index) => {
@@ -135,11 +171,6 @@ const YouTubeToBlogForm = (): JSX.Element => {
     });
   };
 
-  const validateYouTubeUrl = (url: string): boolean => {
-    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}$/;
-    return youtubeRegex.test(url);
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
@@ -211,7 +242,7 @@ const YouTubeToBlogForm = (): JSX.Element => {
               type="url"
               id="videoUrl"
               value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
+              onChange={handleUrlChange}
               placeholder="Enter YouTube video URL (e.g., https://www.youtube.com/watch?v=...)"
               className="w-full px-6 py-3 rounded-xl border border-gray-200
                        focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500
@@ -223,31 +254,55 @@ const YouTubeToBlogForm = (): JSX.Element => {
           
           <motion.button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !isValidUrl}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={`
               w-full py-4 px-6 rounded-xl
-              ${isLoading 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700'
+              relative overflow-hidden
+              ${!isValidUrl 
+                ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                : isLoading 
+                  ? 'bg-gradient-to-r from-pink-500 via-cyan-400 to-purple-600'
+                  : 'bg-gradient-to-r from-pink-500 via-cyan-400 to-purple-600 hover:from-pink-600 hover:via-cyan-500 hover:to-purple-700'
               }
               text-white font-bold text-lg
               transition-all duration-300
-              shadow-xl hover:shadow-2xl hover:shadow-purple-500/30
-              flex items-center justify-center space-x-3
-              border border-white/10 backdrop-blur-sm
+              shadow-xl hover:shadow-2xl
+              hover:shadow-cyan-500/30
+              before:absolute before:inset-0
+              before:bg-gradient-to-r before:from-pink-400/20 before:via-cyan-500/20 before:to-blue-500/20
+              before:animate-gradient-shift before:blur-xl
+              after:absolute after:inset-0
+              after:bg-gradient-to-r after:from-pink-600/50 after:via-cyan-400/50 after:to-blue-600/50
+              after:opacity-0 after:hover:opacity-100 after:transition-opacity after:duration-500
+              group
+              border border-white/20 backdrop-blur-lg
+              [text-shadow:_0_1px_10px_rgb(255_255_255_/_40%)]
             `}
           >
-            {isLoading ? (
-              <>
-                <div className="w-6 h-6 border-3 border-white border-t-transparent
-                             rounded-full animate-spin" />
-                <span>Generating...</span>
-              </>
-            ) : (
-              <span>Generate Blog Post</span>
-            )}
+            <span className="relative z-10 flex items-center justify-center space-x-3">
+              {isLoading ? (
+                <>
+                  <div className="w-6 h-6 border-3 border-white border-t-transparent
+                               rounded-full animate-spin
+                               shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
+                  <span className="animate-pulse">
+                    {loadingText}
+                  </span>
+                </>
+              ) : (
+                <span className="
+                  bg-clip-text text-transparent 
+                  bg-gradient-to-r from-pink-100 via-cyan-100 to-blue-200
+                  animate-gradient-text
+                  group-hover:from-pink-100 group-hover:via-cyan-100 group-hover:to-blue-200
+                ">
+                  Generate Blog Post
+                </span>
+              )}
+            </span>
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-600/20 via-cyan-500/20 to-blue-600/20 blur-2xl animate-pulse" />
           </motion.button>
         </form>
 
