@@ -50,7 +50,7 @@ const getAuthStatus = async () => {
             return { success: true };
         } catch (dbError) {
             console.error("Database error:", dbError);
-            return { error: "Failed to update user profile" };
+            return { error: "Failed to update user profile🥲" };
         }
     } catch (error) {
         console.error("Auth status error:", error);

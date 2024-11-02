@@ -301,6 +301,7 @@ const YouTubeToBlogForm = (): JSX.Element => {
                   Generate Blog Post
                 </span>
               )}
+            
             </span>
             <div className="absolute inset-0 bg-gradient-to-r from-pink-600/20 via-cyan-500/20 to-blue-600/20 blur-2xl animate-pulse" />
           </motion.button>
