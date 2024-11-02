@@ -1,6 +1,6 @@
 "use client"
 
-import { Activity,LifeBuoy, BarChart2, BarChart3, BarChartBig, CalendarClock, Captions, Fullscreen, HandHeart, HeartHandshake, Languages, LineChart, NotebookPen, Recycle, Smile, TrendingUp, Users, Zap } from "lucide-react";
+import { Activity,LifeBuoy, BarChart2, BarChart3, BarChartBig, CalendarClock, Captions, Fullscreen, HandHeart, HeartHandshake, Languages, LineChart, NotebookPen, Recycle, Smile, TrendingUp, Users, Zap, LucideIcon } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import AnimationContainer from "@/components/global/animation-container";
 
@@ -63,7 +63,7 @@ const Offerings = () => {
 
             <AnimationContainer>
                 <div className="flex flex-col items-center justify-center mx-auto max-w-2xl">
-                    <Badge className="bg-black/40 backdrop-blur-xl border border-white/10 px-4 py-2" size="lg" variant="outline">
+                    <Badge className="bg-black/40 backdrop-blur-xl border border-white/10 px-4 py-2" variant="outline">
                         <LifeBuoy className="w-4 h-4 text-primary animate-pulse" />
                         <span className="ml-2 text-sm bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                             Everything on track⚡️
@@ -108,7 +108,7 @@ const Offering = ({ title, description, icon: Icon }: Props) => {
             
             <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-primary via-purple-500 to-blue-500 w-0 group-hover:w-full transition-all duration-500 rounded-full"></div>
 
-            <a>
+            <a
                 href="/dashboard"
                 className="mt-6 px-4 py-2 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
             >
