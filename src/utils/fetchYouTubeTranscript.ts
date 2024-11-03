@@ -6,56 +6,38 @@ export default async function fetchYouTubeTranscript(videoId: string): Promise<s
   }
 
   try {
-    // Clean the video ID
     const cleanVideoId = videoId.trim();
     
-    // Fetch transcript with retry logic
-    let attempts = 0;
-    const maxAttempts = 3;
+    // Single attempt with timeout for serverless
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Transcript fetch timeout')), 8000);
+    });
+
+    const transcriptPromise = YoutubeTranscript.fetchTranscript(cleanVideoId);
     
-    while (attempts < maxAttempts) {
-      try {
-        const transcriptResponse = await YoutubeTranscript.fetchTranscript(cleanVideoId);
-        
-        if (!transcriptResponse || transcriptResponse.length === 0) {
-          throw new Error('No transcript found for this video');
-        }
+    const transcriptResponse = await Promise.race([
+      transcriptPromise,
+      timeoutPromise
+    ]) as any[];
 
-        // Process and clean the transcript
-        const fullTranscript = transcriptResponse
-          .map(item => item.text)
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .replace(/\n+/g, ' ')
-          .trim();
-
-        if (!fullTranscript) {
-          throw new Error('Empty transcript received');
-        }
-
-        return fullTranscript;
-
-      } catch (error) {
-        attempts++;
-        if (attempts === maxAttempts) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
-      }
+    if (!transcriptResponse || !Array.isArray(transcriptResponse) || transcriptResponse.length === 0) {
+      throw new Error('No transcript available');
     }
 
-    throw new Error('Failed to fetch transcript after multiple attempts');
+    const fullTranscript = transcriptResponse
+      .map(item => item.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!fullTranscript) {
+      throw new Error('Empty transcript received');
+    }
+
+    return fullTranscript;
 
   } catch (error) {
     console.error('Transcript fetch error:', error);
-    
-    if (error instanceof Error) {
-      if (error.message.includes('Video unavailable')) {
-        throw new Error('This video is unavailable or private');
-      }
-      if (error.message.includes('Transcript disabled')) {
-        throw new Error('Transcripts are not available for this video');
-      }
-    }
-    
-    throw new Error('Failed to fetch video transcript. Please try another video.');
+    throw new Error('Failed to fetch video transcript');
   }
 } 
