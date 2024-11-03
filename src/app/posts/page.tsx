@@ -8,6 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '@/components/navigation/navbar';
 import Sidebar from '@/components/dashboard/sidebar';
 import { Post } from '@/lib/mdx';
+import toast, { Toaster } from 'react-hot-toast';
+import { EnvelopeIcon } from '@heroicons/react/24/outline';
+import { z } from 'zod';
 
 
 interface SearchResultsProps {
@@ -28,7 +31,7 @@ const SearchResults = ({ filteredPosts, searchQuery, onClose }: SearchResultsPro
         className="absolute top-full left-0 right-0 z-50 mt-2 max-h-[70vh] overflow-auto rounded-2xl border border-purple-500/20 bg-white/10 backdrop-blur-xl shadow-2xl"
       >
         <div className="flex justify-between items-center p-4 border-b border-purple-500/20">
-          <span className="text-gray-200">Found {filteredPosts.length} results</span>
+          <span className="text-gray-900">Found {filteredPosts.length} results</span>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <XCircleIcon className="h-5 w-5" />
           </button>
@@ -106,11 +109,23 @@ const highlightMatch = (text: string, query: string) => {
   );
 };
 
+const emailSchema = z.object({
+  email: z
+    .string()
+    .email('Please enter a valid email address')
+    .min(5, 'Email is too short')
+    .max(100, 'Email is too long'),
+});
+
 export default function Posts() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [inputDisabled, setInputDisabled] = useState(false);
 
   const handleCategoryClick = (category: string) => {
     setSelectedCategory(selectedCategory === category ? null : category);
@@ -146,6 +161,62 @@ export default function Posts() {
   }, [posts, searchQuery, selectedCategory]);
 
   const categories = ['AI & ML', 'Web3', 'DevOps', 'Cloud'];
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const validatedData = emailSchema.parse({ email });
+      
+      setIsSubmitting(true);
+      setInputDisabled(true);
+
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ email: validatedData.email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Subscription failed');
+      }
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold">Welcome to our community! 🎉</p>
+          <p className="text-sm">We'll be in touch soon at {email}</p>
+        </div>,
+        {
+          duration: 6000,
+          style: {
+            background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+            color: 'white',
+          },
+        }
+      );
+
+      setIsSubscribed(true);
+      setEmail('');
+
+    } catch (error) {
+      setInputDisabled(false);
+      
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -329,26 +400,134 @@ export default function Posts() {
               </div>
 
               {/* Newsletter Section */}
-              <div className="rounded-3xl bg-gradient-to-br from-purple-600 via-pink-600 to-blue-600 p-12 text-center mt-20">
-                <h3 className="text-3xl font-bold text-white">Stay Updated</h3>
-                <p className="mt-4 text-gray-300">Get the latest articles delivered right to your inbox</p>
-                <div className="mx-auto mt-8 max-w-md">
-                  <div className="flex space-x-4">
-                    <input
-                      type="email"
-                      placeholder="Enter your email"
-                      className="w-full rounded-xl bg-white/5 px-6 py-3 text-white placeholder-gray-400 backdrop-blur-xl transition-all duration-300 focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                    />
-                    <button className="rounded-xl bg-purple-500 px-6 py-3 font-medium text-white transition-all duration-300 hover:bg-purple-600">
-                      Subscribe
-                    </button>
-                  </div>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5 }}
+                className="relative rounded-3xl overflow-hidden mt-20"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-pink-600 to-blue-600 opacity-90" />
+                <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20" />
+                
+                <div className="relative p-12 text-center">
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    whileInView={{ scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                  >
+                    {isSubscribed ? (
+                      <>
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="mx-auto mb-6 h-16 w-16 rounded-full bg-green-500/20 p-3"
+                        >
+                          <svg
+                            className="h-full w-full text-green-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </motion.div>
+                        <h3 className="text-4xl font-bold text-white mb-4">
+                          Thank You for Subscribing!
+                        </h3>
+                        <p className="text-lg text-gray-200 max-w-md mx-auto">
+                          We'll be in touch soon with exciting updates and exclusive content.
+                          Check your inbox for a welcome message!
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-block p-3 rounded-full bg-white/10 backdrop-blur-xl mb-4">
+                          <EnvelopeIcon className="h-6 w-6 text-white" />
+                        </span>
+                        <h3 className="text-4xl font-bold text-white mb-4">
+                          Stay Updated
+                        </h3>
+                        <p className="text-lg text-gray-200 max-w-md mx-auto">
+                          Join our newsletter for the latest updates and exclusive content.
+                          No spam, unsubscribe at any time.
+                        </p>
+                      </>
+                    )}
+                  </motion.div>
+
+                  {!isSubscribed && (
+                    <form onSubmit={handleNewsletterSubmit} className="mx-auto mt-8 max-w-md">
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="relative flex-1">
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Enter your email"
+                            disabled={inputDisabled}
+                            className="w-full h-14 rounded-xl bg-white/10 px-6 pl-12 text-white 
+                                     placeholder-gray-300 backdrop-blur-xl transition-all duration-300 
+                                     border border-white/10 focus:border-white/20
+                                     focus:outline-none focus:ring-2 focus:ring-purple-500/50
+                                     disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                            <EnvelopeIcon className="h-5 w-5 text-gray-300" />
+                          </div>
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          disabled={isSubmitting}
+                          className={`h-14 rounded-xl px-8 font-medium text-white transition-all duration-300
+                                   ${isSubmitting 
+                                     ? 'bg-purple-400 cursor-not-allowed' 
+                                     : 'bg-purple-500 hover:bg-purple-600 hover:shadow-lg hover:shadow-purple-500/30'
+                                   }
+                                   disabled:opacity-70`}
+                        >
+                          {isSubmitting ? (
+                            <div className="flex items-center space-x-2">
+                              <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin" />
+                              <span>Subscribing...</span>
+                            </div>
+                          ) : (
+                            'Subscribe Now'
+                          )}
+                        </motion.button>
+                      </div>
+                    </form>
+                  )}
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
       </div>
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          style: {
+            background: '#333',
+            color: '#fff',
+            borderRadius: '1rem',
+          },
+          success: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#9333EA',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </>
   );
 }
