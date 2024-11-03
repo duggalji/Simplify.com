@@ -176,256 +176,69 @@ class FileProcessor {
 
 // Advanced analytics generation
 class AnalyticsGenerator {
-  private model: any;
+  private model: GenerativeModel | null;
   private data: any;
-  private readonly maxChunkSize: number = 25000;
-  private readonly maxSampleSize: number = 500;
+  private readonly maxChunkSize: number = 15000; // Reduced for serverless
+  private readonly maxSampleSize: number = 100;  // Reduced for serverless
+  private readonly timeout: number = 8000;      // 8 second timeout
 
   constructor() {
     this.model = null;
     this.data = null;
   }
 
-  setModel(model: any) {
+  setModel(model: GenerativeModel) {
     if (!model) {
       throw new Error('Invalid model provided');
     }
     this.model = model;
   }
 
-  async generateAnalytics(data: any, section: any, filename: string) {
+  private validateModel() {
+    if (!this.model) {
+      throw new Error('Model not initialized');
+    }
+  }
+
+  async generateAnalytics(data: any, section: AnalyticsSection, filename: string): Promise<AnalyticsResponse> {
     try {
       this.validateModel();
-      this.data = data; // Store the data
-      const processedData = await this.processLargeData(data);
+      this.data = this.sanitizeData(data);
+      const processedData = await this.processLargeData(this.data);
       
-      const primaryResults = await Promise.all(
-        section.subsections.primary.map((metric: string) => 
-          this.processMetric(metric, 'primary', 2)
-            .then(result => [metric, result])
-        )
-      );
-
-      let deepResults = [];
-      if (section.subsections.deep?.length) {
-        const deepPromise = Promise.all(
-          section.subsections.deep.map((metric: string) =>
-            this.processMetric(metric, 'deep', 1)
-              .then(result => [metric, result])
-          )
-        );
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Deep analysis timeout')), 15000)
-        );
-        try {
-          deepResults = (await Promise.race([deepPromise, timeoutPromise])) as Array<[string, any]>;
-        } catch (error) {
-          console.warn('Deep analysis timed out, using fallback');
-          deepResults = section.subsections.deep.map((metric: string) => 
-            [metric, this.getFallbackMetric(metric)]
-          );
-        }
-      }
+      const primaryResults = await this.processPrimaryMetrics(section, processedData);
+      const deepResults = await this.processDeepMetrics(section, processedData);
 
       return {
-        primary: Object.fromEntries(primaryResults),
-        deep: Object.fromEntries(deepResults)
+        primary: primaryResults,
+        deep: deepResults
       };
-
     } catch (error) {
-      console.error('Analytics generation error:', error);
+      console.error('Analytics error:', error);
       return this.getFallbackResponse(section);
     }
   }
 
-  private validateModel() {
-    if (!this.model) {
-      throw new Error('Model not initialized. Call setModel() first.');
+  private sanitizeData(data: any): any {
+    if (typeof data === 'object' && data !== null) {
+      const cleaned = { ...data };
+      delete cleaned.buffer;
+      delete cleaned.raw;
+      return cleaned;
     }
-  }
-
-  private buildPrompt(data: string, sectionKey: string, metrics: string[]): string {
-    return `Analyze this ${sectionKey} data and provide insights. Return ONLY a JSON object without any markdown formatting or code blocks.
-
-Data: ${data}
-
-Required Metrics: ${metrics.join(', ')}
-
-Response must be a valid JSON object with this exact structure (no additional formatting):
-{
-  "analysis": {
-    "${metrics[0]}": {
-      "summary": "detailed findings",
-      "key_points": ["point 1", "point 2"],
-      "metrics": {"metric1": "value1"},
-      "recommendations": ["rec 1", "rec 2"]
-    }
-  },
-  "overall_summary": "overview",
-  "confidence_score": 0.95
-}`;
-  }
-
-  private safeParseResponse(text: string): any {
-    try {
-      // Remove any markdown formatting or code blocks
-      let cleanText = text.replace(/```json\n?|\n?```/g, '');
-      cleanText = cleanText.replace(/^[\s\n]*{/, '{').replace(/}[\s\n]*$/, '}');
-      
-      // Attempt to parse the cleaned JSON
-      const parsed = JSON.parse(cleanText);
-      
-      // Validate the response structure
-      if (!parsed || typeof parsed !== 'object') {
-        throw new Error('Invalid response structure');
-      }
-
-      return parsed;
-    } catch (error) {
-      console.error('Error parsing response:', error, '\nOriginal text:', text);
-      return {
-        analysis: {
-          "default": {
-            summary: "Analysis pending",
-            key_points: [],
-            metrics: {},
-            recommendations: []
-          }
-        },
-        overall_summary: "Analysis pending", 
-        confidence_score: 0
-      };
-    }
-  }
-
-  private getFallbackResponse(section: any) {
-    return {
-      primary: Object.fromEntries(
-        section.subsections.primary.map((key: string) => [key, `Analysis pending for ${key}`])
-      ),
-      deep_metrics: Object.fromEntries(
-        section.subsections.deep.map((key: string) => [key, `Deep analysis pending for ${key}`])
-      )
-    };
+    return data;
   }
 
   private async processLargeData(data: any): Promise<string> {
     try {
-      const formattedData = this.formatData(data);
-      const chunks = this.splitIntoChunks(formattedData, this.maxChunkSize);
-      return chunks[0]; // Use first chunk for analysis
+      const stringData = typeof data === 'string' 
+        ? data 
+        : JSON.stringify(data, null, 2);
+      return this.truncateData(stringData);
     } catch (error) {
       console.error('Error processing large data:', error);
-      return JSON.stringify({
-        error: 'Data processing failed',
-        type: data.type,
-        filename: data.filename
-      });
+      return 'Error processing data';
     }
-  }
-
-  private splitIntoChunks(text: string, size: number): string[] {
-    const chunks: string[] = [];
-    for (let i = 0; i < text.length; i += size) {
-      chunks.push(text.slice(i, i + size));
-    }
-    return chunks;
-  }
-
-  private formatData(data: any): string {
-    if (Array.isArray(data)) {
-      return JSON.stringify(data.map(item => this.cleanData(item)));
-    }
-    return JSON.stringify(this.cleanData(data));
-  }
-
-  private cleanData(data: any): any {
-    if (typeof data !== 'object' || data === null) return data;
-    
-    const cleaned: any = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (value !== null && value !== undefined) {
-        cleaned[key] = typeof value === 'object' 
-          ? this.cleanData(value)
-          : value;
-      }
-    }
-    return cleaned;
-  }
-
-  private generateSummaryStats(rows: any[]): any {
-    return {
-      totalRows: rows.length,
-      columns: Object.keys(rows[0] || {}),
-      dataTypes: this.analyzeDataTypes(rows[0] || {}),
-      sampleStats: this.calculateBasicStats(rows)
-    };
-  }
-
-  private analyzeDataTypes(row: any): Record<string, string> {
-    const types: Record<string, string> = {};
-    for (const [key, value] of Object.entries(row)) {
-      types[key] = this.getDetailedType(value);
-    }
-    return types;
-  }
-
-  private getDetailedType(value: any): string {
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? 'integer' : 'float';
-    }
-    if (value instanceof Date) return 'date';
-    return typeof value;
-  }
-
-  private calculateBasicStats(rows: any[]): any {
-    // Add basic statistical calculations
-    // This is a simplified version - expand based on your needs
-    return {
-      rowCount: rows.length,
-      columnCount: Object.keys(rows[0] || {}).length,
-      // Add more stats as needed
-    };
-  }
-
-  private getFallbackMetric(metric: string) {
-    return {
-      summary: `Analysis pending for ${metric}`,
-      key_points: [`Unable to analyze ${metric}`],
-      metrics: {},
-      recommendations: [`Retry analysis for ${metric}`]
-    };
-  }
-
-  private async processMetric(metric: string, type: 'primary' | 'deep', retries = 2) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        // Store the processed data as a class property
-        const data = await this.processLargeData(this.data);
-        const prompt = this.buildPrompt(this.truncateData(data), type, [metric]);
-        
-        const response = await Promise.race([
-          this.model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.7,
-              topK: 40,
-              topP: 0.8,
-              maxOutputTokens: 1024,
-            }
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Generation timeout')), 10000))
-        ]);
-
-        const result = this.safeParseResponse(response.response.text());
-        if (result.analysis?.[metric]) return result.analysis[metric];
-      } catch (error) {
-        if (attempt === retries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    return this.getFallbackMetric(metric);
   }
 
   private truncateData(data: string): string {
@@ -433,14 +246,122 @@ Response must be a valid JSON object with this exact structure (no additional fo
       ? data.slice(0, this.maxChunkSize) + '...'
       : data;
   }
+
+  private async processPrimaryMetrics(section: AnalyticsSection, data: string): Promise<Record<string, MetricResponse>> {
+    try {
+      const results = await Promise.race([
+        Promise.all(
+          section.subsections.primary.map(metric =>
+            this.processMetric(metric, 'primary', data)
+          )
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Primary analysis timeout')), this.timeout)
+        )
+      ]) as MetricResponse[];
+
+      return Object.fromEntries(
+        results.map((result, index) => [section.subsections.primary[index], result])
+      );
+    } catch (error) {
+      return this.getFallbackPrimaryMetrics(section);
+    }
+  }
+
+  private async processDeepMetrics(section: AnalyticsSection, data: string): Promise<Record<string, MetricResponse>> {
+    if (!section.subsections.deep?.length) return {};
+
+    try {
+      const results = await Promise.race([
+        Promise.all(
+          section.subsections.deep.map(metric =>
+            this.processMetric(metric, 'deep', data)
+          )
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Deep analysis timeout')), this.timeout)
+        )
+      ]) as MetricResponse[];
+
+      return Object.fromEntries(
+        results.map((result, index) => [section.subsections.deep[index], result])
+      );
+    } catch (error) {
+      return this.getFallbackDeepMetrics(section);
+    }
+  }
+
+  private async processMetric(metric: string, type: 'primary' | 'deep', data: string): Promise<MetricResponse> {
+    try {
+      const prompt = this.buildPrompt(data, type, [metric]);
+      const response = await this.model!.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.8,
+          maxOutputTokens: 1024,
+        }
+      });
+
+      const result = this.safeParseResponse(response.response.text());
+      if (result.analysis?.[metric]) return result.analysis[metric];
+      return this.getFallbackMetric(metric);
+    } catch (error) {
+      return this.getFallbackMetric(metric);
+    }
+  }
+
+  private buildPrompt(data: string, type: string, metrics: string[]): string {
+    return `Analyze this ${type} data and provide insights. Return ONLY a JSON object.
+Data: ${data}
+Required Metrics: ${metrics.join(', ')}`;
+  }
+
+  private getFallbackMetric(metric: string): MetricResponse {
+    return {
+      summary: `Analysis pending for ${metric}`,
+      key_points: [],
+      metrics: {},
+      recommendations: []
+    };
+  }
+
+  private getFallbackPrimaryMetrics(section: AnalyticsSection): Record<string, MetricResponse> {
+    return Object.fromEntries(
+      section.subsections.primary.map(metric => [metric, this.getFallbackMetric(metric)])
+    );
+  }
+
+  private getFallbackDeepMetrics(section: AnalyticsSection): Record<string, MetricResponse> {
+    return Object.fromEntries(
+      (section.subsections.deep || []).map(metric => [metric, this.getFallbackMetric(metric)])
+    );
+  }
+
+  private getFallbackResponse(section: AnalyticsSection): AnalyticsResponse {
+    return {
+      primary: this.getFallbackPrimaryMetrics(section),
+      deep: this.getFallbackDeepMetrics(section)
+    };
+  }
+
+  private safeParseResponse(text: string): any {
+    try {
+      const cleanText = text.replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(cleanText);
+    } catch (error) {
+      console.error('Error parsing response:', error);
+      return { analysis: {} };
+    }
+  }
 }
 //ai
-// Main request handler with enhanced error handling and validation
-export async function POST(request: NextRequest) {
+// Main request handler with proper return type
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    // Add timeout wrapper
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 58000);
+    const timeoutPromise = new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 25000);
     });
 
     const processPromise = processRequest(request);
@@ -459,24 +380,89 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processRequest(request: NextRequest) {
-  const formData = await request.formData();
-  const files = formData.getAll('files') as File[];
+// Helper function with proper return type
+async function processRequest(request: NextRequest): Promise<Response> {
+  try {
+    const formData = await request.formData();
+    const files = formData.getAll('files') as File[];
 
-  if (!files?.length) {
-    return NextResponse.json({ success: false, error: 'No files provided' }, { status: 400 });
+    if (!files?.length) {
+      return NextResponse.json(
+        { success: false, error: 'No files provided' }, 
+        { status: 400 }
+      );
+    }
+
+    // Add file validation
+    const validationError = validateFiles(files);
+    if (validationError) {
+      return NextResponse.json(
+        { success: false, error: validationError }, 
+        { status: 400 }
+      );
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process files sequentially
+    for (const file of files) {
+      try {
+        const result = await processFileWithTimeout(file);
+        results.push(result);
+      } catch (error) {
+        errors.push({
+          filename: file.name,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      results,
+      errors,
+      totalFiles: files.length,
+      successfulFiles: results.length,
+      failedFiles: errors.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        timestamp: new Date().toISOString()
+      },
+      { status: 500 }
+    );
   }
+}
 
-  // Reduce file size limit for serverless
-  if (files.some(file => file.size > 50 * 1024 * 1024)) { // 50MB limit
-    return NextResponse.json({ success: false, error: 'File size exceeds 50MB limit' }, { status: 400 });
+// Helper functions
+function validateFiles(files: File[]): string | null {
+  if (files.some(file => file.size > 50 * 1024 * 1024)) {
+    return 'File size exceeds 50MB limit';
   }
+  return null;
+}
 
-  // Process files sequentially instead of parallel for better reliability
-  const results = [];
-  const errors = [];
+// Add interface for file processing result
+interface FileProcessingResult {
+  filename: string;
+  processedData: any;
+  analytics: AnalyticsResponse;
+  timestamp: string;
+}
 
-  for (const file of files) {
+// Update processFileWithTimeout with proper typing
+async function processFileWithTimeout(file: File): Promise<FileProcessingResult> {
+  const timeoutPromise = new Promise<FileProcessingResult>((_, reject) => 
+    setTimeout(() => reject(new Error('File processing timeout')), 15000)
+  );
+
+  const processPromise = async (): Promise<FileProcessingResult> => {
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
       const processedData = await FileProcessor.processFile(file.name, buffer);
@@ -485,14 +471,13 @@ async function processRequest(request: NextRequest) {
       analyticsGenerator.setModel(genAI.getGenerativeModel({ 
         model: "gemini-pro",
         generationConfig: {
-          maxOutputTokens: 1024, // Reduced for faster processing
+          maxOutputTokens: 1024,
           temperature: 0.7,
           topP: 0.8,
           topK: 40
         }
       }));
 
-      // Simplified analytics sections
       const section = {
         title: "File Analysis",
         subsections: {
@@ -507,34 +492,43 @@ async function processRequest(request: NextRequest) {
         file.name
       );
 
-      results.push({
+      return {
         filename: file.name,
         processedData,
         analytics,
         timestamp: new Date().toISOString()
-      });
-
+      };
     } catch (error) {
-      console.error(`Error processing ${file.name}:`, error);
-      errors.push({
-        filename: file.name,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      throw new Error(`Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }
+  };
 
-  return NextResponse.json({
-    success: true,
-    results,
-    errors,
-    totalFiles: files.length,
-    successfulFiles: results.length,
-    failedFiles: errors.length,
-    timestamp: new Date().toISOString()
-  });
-}//FEATURES ADDED
-// Update these exports for Vercel serverless
-export const runtime = 'edge';  // Use edge runtime
-export const maxDuration = 30;  // 60 seconds max
+  return Promise.race([processPromise(), timeoutPromise]);
+}
+
+// Configuration for Vercel serverless
+export const runtime = 'edge';
+export const maxDuration = 30;
 export const preferredRegion = 'auto';
 export const dynamic = 'force-dynamic';
+
+// Add after imports
+interface AnalyticsSection {
+  title: string;
+  subsections: {
+    primary: string[];
+    deep: string[];
+  };
+}
+
+interface AnalyticsResponse {
+  primary: Record<string, any>;
+  deep: Record<string, any>;
+}
+
+interface MetricResponse {
+  summary: string;
+  key_points: string[];
+  metrics: Record<string, any>;
+  recommendations: string[];
+}
