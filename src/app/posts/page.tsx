@@ -442,7 +442,7 @@ export default function Posts() {
                           Thank You for Subscribing!
                         </h3>
                         <p className="text-lg text-gray-200 max-w-md mx-auto">
-                          We'll be in touch soon with exciting updates and exclusive content.
+                          We&apos;ll be in touch soon with exciting updates and exclusive content.
                           Check your inbox for a welcome message!
                         </p>
                       </>
