@@ -189,7 +189,7 @@ export default function Posts() {
       toast.success(
         <div className="flex flex-col gap-1">
           <p className="font-semibold">Welcome to our community! 🎉</p>
-          <p className="text-sm">We'll be in touch soon at {email}</p>
+          <p className="text-sm">We&apos;ll be in touch soon at {email}</p>
         </div>,
         {
           duration: 6000,

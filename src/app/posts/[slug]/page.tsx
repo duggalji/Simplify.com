@@ -165,7 +165,7 @@ export default async function PostLayout({ params }: PageProps) {
                       <time dateTime={post.date} className="font-semibold text-white">
                         {format(parseISO(post.date), 'LLLL d, yyyy')}
                       </time>
-                      <span className="font-bold text-purple-300">COGNITICA</span>
+                      <span className="font-bold text-purple-300">SIMPLIFY.AI⚡️</span>
                     </div>
                     <div className="flex items-center space-x-2 text-xs lg:text-sm text-gray-300">
                       <span>Last updated</span>
