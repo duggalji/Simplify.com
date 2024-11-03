@@ -103,6 +103,9 @@ async function fetchYouTubeMetadata(videoId: string): Promise<YouTubeMetadata | 
   }
 }
 
+export const runtime = 'nodejs'; // Change from edge to nodejs
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
   try {
     // Parse and validate request body
@@ -128,17 +131,27 @@ export async function POST(req: NextRequest): Promise<NextResponse<SuccessRespon
     let metadata: YouTubeMetadata | null = null;
 
     try {
-      [transcript, metadata] = await Promise.all([
-        Promise.race([
-          fetchYouTubeTranscript(videoId),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Transcript fetch timeout')), 15000)
-          )
-        ]),
-        fetchYouTubeMetadata(videoId)
-      ]);
+      console.log('Fetching data for video ID:', videoId);
+      
+      // Fetch transcript and metadata sequentially instead of parallel
+      transcript = await fetchYouTubeTranscript(videoId).catch(error => {
+        console.error('Transcript fetch failed:', error);
+        throw new Error('Unable to fetch video transcript');
+      });
+
+      metadata = await fetchYouTubeMetadata(videoId).catch(error => {
+        console.error('Metadata fetch failed:', error);
+        throw new Error('Unable to fetch video metadata');
+      });
+
+      console.log('Transcript length:', transcript?.length);
+      console.log('Metadata received:', !!metadata);
     } catch (error) {
-      console.error('Fetch error:', error);
+      console.error('Fetch error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
       return NextResponse.json({
         error: error instanceof Error 
           ? error.message 

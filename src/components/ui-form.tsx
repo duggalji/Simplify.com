@@ -1,8 +1,18 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { z } from "zod";
+import { toast, Toaster } from "react-hot-toast";
+
+const formSchema = z.object({
+  firstname: z.string().min(2, "First name must be at least 2 characters"),
+  lastname: z.string().min(2, "Last name must be at least 2 characters"), 
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  company: z.string().min(2, "Company name must be at least 2 characters")
+});
 
 interface LabelInputContainerProps {
   children: React.ReactNode;
@@ -31,12 +41,72 @@ const BottomGradient = () => {
 };
 
 export function SignupFormDemo() {
+  const [formData, setFormData] = useState({
+    firstname: "",
+    lastname: "",
+    email: "",
+    password: "",
+    company: ""
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.id]: e.target.value
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Form submitted");
+    try {
+      formSchema.parse(formData);
+      // If validation passes
+      toast.custom((t) => (
+        <div
+          className={`${
+            t.visible ? 'animate-enter' : 'animate-leave'
+          } max-w-md w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+        >
+          <div className="flex-1 w-0 p-4">
+            <div className="flex items-start">
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium text-white">
+                  Success! 🎉
+                </p>
+                <p className="mt-1 text-sm text-gray-200">
+                  Thank you for joining our waitlist! Well be in touch soon.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex border-l border-gray-200">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-white hover:text-gray-200 focus:outline-none"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ));
+      setErrors({});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path) {
+            newErrors[err.path[0]] = err.message;
+          }
+        });
+        setErrors(newErrors);
+      }
+    }
   };
+
   return (
     <div className="flex items-center justify-center p-4">
+      <Toaster position="top-center" />
       <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Form Section */}
         <div className="bg-black/30 backdrop-blur-lg rounded-2xl p-8 shadow-xl">
@@ -53,22 +123,54 @@ export function SignupFormDemo() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <LabelInputContainer>
                 <Label htmlFor="firstname">First Name</Label>
-                <Input id="firstname" placeholder="John" type="text" />
+                <Input 
+                  id="firstname" 
+                  placeholder="John" 
+                  type="text"
+                  value={formData.firstname}
+                  onChange={handleChange}
+                  className={errors.firstname ? "border-red-500" : ""}
+                />
+                {errors.firstname && <p className="text-red-500 text-xs mt-1">{errors.firstname}</p>}
               </LabelInputContainer>
               <LabelInputContainer>
                 <Label htmlFor="lastname">Last Name</Label>
-                <Input id="lastname" placeholder="Smith" type="text" />
+                <Input 
+                  id="lastname" 
+                  placeholder="Smith" 
+                  type="text"
+                  value={formData.lastname}
+                  onChange={handleChange}
+                  className={errors.lastname ? "border-red-500" : ""}
+                />
+                {errors.lastname && <p className="text-red-500 text-xs mt-1">{errors.lastname}</p>}
               </LabelInputContainer>
             </div>
             
             <LabelInputContainer>
               <Label htmlFor="email">Email</Label>
-              <Input id="email" placeholder="you@example.com" type="email" />
+              <Input 
+                id="email" 
+                placeholder="you@example.com" 
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                className={errors.email ? "border-red-500" : ""}
+              />
+              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
             </LabelInputContainer>
             
             <LabelInputContainer>
               <Label htmlFor="password">Password</Label>
-              <Input id="password" placeholder="••••••••" type="password" />
+              <Input 
+                id="password" 
+                placeholder="••••••••" 
+                type="password"
+                value={formData.password}
+                onChange={handleChange}
+                className={errors.password ? "border-red-500" : ""}
+              />
+              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
             </LabelInputContainer>
             
             <LabelInputContainer>
@@ -77,7 +179,11 @@ export function SignupFormDemo() {
                 id="company"
                 placeholder="Your Company"
                 type="text"
+                value={formData.company}
+                onChange={handleChange}
+                className={errors.company ? "border-red-500" : ""}
               />
+              {errors.company && <p className="text-red-500 text-xs mt-1">{errors.company}</p>}
             </LabelInputContainer>
 
             <button
