@@ -177,11 +177,13 @@ class FileProcessor {
 // Advanced analytics generation
 class AnalyticsGenerator {
   private model: any;
-  private readonly maxChunkSize: number = 50000;
-  private readonly maxSampleSize: number = 1000;
+  private data: any;
+  private readonly maxChunkSize: number = 25000;
+  private readonly maxSampleSize: number = 500;
 
   constructor() {
     this.model = null;
+    this.data = null;
   }
 
   setModel(model: any) {
@@ -194,55 +196,43 @@ class AnalyticsGenerator {
   async generateAnalytics(data: any, section: any, filename: string) {
     try {
       this.validateModel();
+      this.data = data; // Store the data
       const processedData = await this.processLargeData(data);
       
-      const analytics = {
-        primary: {},
-        deep: {}
-      };
+      const primaryResults = await Promise.all(
+        section.subsections.primary.map((metric: string) => 
+          this.processMetric(metric, 'primary', 2)
+            .then(result => [metric, result])
+        )
+      );
 
-      // Process metrics with retry logic
-      const processMetric = async (metric: string, type: 'primary' | 'deep', retries = 3) => {
-        for (let attempt = 0; attempt < retries; attempt++) {
-          try {
-            const prompt = this.buildPrompt(processedData, type, [metric]);
-            const response = await this.model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 2048,
-              }
-            });
+      let deepResults = [];
+      if (section.subsections.deep?.length) {
+        const deepPromise = Promise.all(
+          section.subsections.deep.map((metric: string) =>
+            this.processMetric(metric, 'deep', 1)
+              .then(result => [metric, result])
+          )
+        );
 
-            const result = this.safeParseResponse(response.response.text());
-            if (result.analysis && result.analysis[metric]) {
-              return result.analysis[metric];
-            }
-          } catch (error) {
-            console.error(`Attempt ${attempt + 1} failed for ${metric}:`, error);
-            if (attempt === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-          }
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Deep analysis timeout')), 15000)
+        );
+        try {
+          deepResults = (await Promise.race([deepPromise, timeoutPromise])) as Array<[string, any]>;
+        } catch (error) {
+          console.warn('Deep analysis timed out, using fallback');
+          deepResults = section.subsections.deep.map((metric: string) => 
+            [metric, this.getFallbackMetric(metric)]
+          );
         }
-        return this.getFallbackMetric(metric);
+      }
+
+      return {
+        primary: Object.fromEntries(primaryResults),
+        deep: Object.fromEntries(deepResults)
       };
 
-      // Process all metrics with Promise.all
-      const [primaryResults, deepResults] = await Promise.all([
-        Promise.all(section.subsections.primary.map((metric: string) => 
-          processMetric(metric, 'primary').then(result => [metric, result])
-        )),
-        Promise.all(section.subsections.deep.map((metric: string) => 
-          processMetric(metric, 'deep').then(result => [metric, result])
-        ))
-      ]);
-
-      analytics.primary = Object.fromEntries(primaryResults);
-      analytics.deep = Object.fromEntries(deepResults);
-
-      return analytics;
     } catch (error) {
       console.error('Analytics generation error:', error);
       return this.getFallbackResponse(section);
@@ -407,97 +397,54 @@ Response must be a valid JSON object with this exact structure (no additional fo
       recommendations: [`Retry analysis for ${metric}`]
     };
   }
+
+  private async processMetric(metric: string, type: 'primary' | 'deep', retries = 2) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        // Store the processed data as a class property
+        const data = await this.processLargeData(this.data);
+        const prompt = this.buildPrompt(this.truncateData(data), type, [metric]);
+        
+        const response = await Promise.race([
+          this.model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.8,
+              maxOutputTokens: 1024,
+            }
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Generation timeout')), 10000))
+        ]);
+
+        const result = this.safeParseResponse(response.response.text());
+        if (result.analysis?.[metric]) return result.analysis[metric];
+      } catch (error) {
+        if (attempt === retries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    return this.getFallbackMetric(metric);
+  }
+
+  private truncateData(data: string): string {
+    return data.length > this.maxChunkSize 
+      ? data.slice(0, this.maxChunkSize) + '...'
+      : data;
+  }
 }
 //ai
 // Main request handler with enhanced error handling and validation
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const files = formData.getAll('files') as File[];
-
-    if (!files?.length) {
-      return NextResponse.json({ success: false, error: 'No files provided' }, { status: 400 });
-    }
-
-    if (files.some(file => file.size > 500 * 1024 * 1024)) {
-      return NextResponse.json({ success: false, error: 'File size exceeds 500MB limit' }, { status: 400 });
-    }
-
-    // Process files and generate analytics
-    const results = await Promise.allSettled(
-      files.map(async (file) => {
-        try {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          const processedData = await FileProcessor.processFile(file.name, buffer);
-          
-          // Create analytics generator without constructor args
-          const analyticsGenerator = new AnalyticsGenerator();
-          
-          // Set the model after instantiation
-          analyticsGenerator.setModel(genAI.getGenerativeModel({ model: "gemini-pro" }));
-
-          // Define analytics sections based on file type
-          const section = {
-            title: "File Analysis", 
-            subsections: {
-              primary: [
-                "Data Overview",
-                "Key Metrics", 
-                "Data Quality",
-                "Patterns & Trends"
-              ],
-              deep: [
-                "Statistical Analysis",
-                "Anomaly Detection",
-                "Data Distribution",
-                "Correlation Analysis",
-                "Time Series Patterns"
-              ]
-            }
-          };
-          
-          const analytics = await analyticsGenerator.generateAnalytics(
-            processedData,
-            section,
-            file.name
-          );
-
-          return {
-            filename: file.name,
-            processedData,
-            analytics,
-            timestamp: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Error processing ${file.name}:`, error);
-          throw error;
-        }
-      })
-    );
-
-    const successfulResults = results
-      .filter((result): result is PromiseFulfilledResult<any> => 
-        result.status === 'fulfilled'
-      )
-      .map(result => result.value);
-
-    const failedResults = results
-      .filter((result): result is PromiseRejectedResult => 
-        result.status === 'rejected'
-      )
-      .map(result => ({
-        error: result.reason instanceof Error ? result.reason.message : 'Unknown error'
-      }));
-
-    return NextResponse.json({
-      success: true,
-      results: successfulResults,
-      errors: failedResults,
-      totalFiles: files.length,
-      successfulFiles: successfulResults.length,
-      failedFiles: failedResults.length,
-      timestamp: new Date().toISOString()
+    // Add timeout wrapper
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 58000);
     });
+
+    const processPromise = processRequest(request);
+    return await Promise.race([processPromise, timeoutPromise]);
 
   } catch (error) {
     console.error('Processing error:', error);
@@ -511,4 +458,83 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-//FEATURES ADDED
+
+async function processRequest(request: NextRequest) {
+  const formData = await request.formData();
+  const files = formData.getAll('files') as File[];
+
+  if (!files?.length) {
+    return NextResponse.json({ success: false, error: 'No files provided' }, { status: 400 });
+  }
+
+  // Reduce file size limit for serverless
+  if (files.some(file => file.size > 50 * 1024 * 1024)) { // 50MB limit
+    return NextResponse.json({ success: false, error: 'File size exceeds 50MB limit' }, { status: 400 });
+  }
+
+  // Process files sequentially instead of parallel for better reliability
+  const results = [];
+  const errors = [];
+
+  for (const file of files) {
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const processedData = await FileProcessor.processFile(file.name, buffer);
+      
+      const analyticsGenerator = new AnalyticsGenerator();
+      analyticsGenerator.setModel(genAI.getGenerativeModel({ 
+        model: "gemini-pro",
+        generationConfig: {
+          maxOutputTokens: 1024, // Reduced for faster processing
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40
+        }
+      }));
+
+      // Simplified analytics sections
+      const section = {
+        title: "File Analysis",
+        subsections: {
+          primary: ["Data Overview", "Key Metrics"],
+          deep: ["Statistical Analysis", "Data Distribution"]
+        }
+      };
+
+      const analytics = await analyticsGenerator.generateAnalytics(
+        processedData,
+        section,
+        file.name
+      );
+
+      results.push({
+        filename: file.name,
+        processedData,
+        analytics,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error(`Error processing ${file.name}:`, error);
+      errors.push({
+        filename: file.name,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    results,
+    errors,
+    totalFiles: files.length,
+    successfulFiles: results.length,
+    failedFiles: errors.length,
+    timestamp: new Date().toISOString()
+  });
+}//FEATURES ADDED
+// Update these exports for Vercel serverless
+export const runtime = 'edge';  // Use edge runtime
+export const maxDuration = 30;  // 60 seconds max
+export const preferredRegion = 'auto';
+export const dynamic = 'force-dynamic';
