@@ -1,9 +1,7 @@
 import { parse as parseCSV } from 'csv-parse/sync'
 import { XMLParser } from 'fast-xml-parser'
 import { load as parseYAML } from 'js-yaml'
-import { unified } from 'unified'
-import remarkParse from 'remark-parse'
-import remarkHtml from 'remark-html'
+import { marked } from 'marked' // Import marked directly
 import { JSDOM } from 'jsdom'
 
 export const parseDocument = {
@@ -20,13 +18,7 @@ export const parseDocument = {
 
   async fromMarkdown(markdown: string): Promise<string> {
     try {
-      // Use unified with remark plugins to convert markdown to HTML
-      const file = await unified()
-        .use(remarkParse)
-        .use(remarkHtml)
-        .process(markdown)
-      
-      const html = String(file)
+      const html = await marked.parse(markdown) // Use marked.parse instead of marked directly
       return this.fromHtml(html)
     } catch (error) {
       console.error('Markdown parsing error:', error)
