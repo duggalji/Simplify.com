@@ -1,7 +1,7 @@
 import { prisma } from '@/utils/prisma';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import type { Prisma } from '@prisma/client';
-
+//updated new changes 
 // Define custom types for our use case
 interface UserInfo {
   name: string | null;
