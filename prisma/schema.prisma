@@ -74,6 +74,7 @@ model LinkTag {
   @@unique([name, projectId])
   @@index(projectId)
 }
+//added conversion metric table
 
 model ConversionMetric {
   id               String   @id @default(cuid())

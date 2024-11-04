@@ -1,15 +1,26 @@
 import { prisma } from '@/lib/prisma';
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { Prisma } from '@prisma/client';
+
+type CommentWithUser = Prisma.CommentGetPayload<{
+  include: {
+    user: {
+      select: {
+        name: true;
+        email: true;
+        image: true;
+      };
+    };
+  };
+}>;
 
 export const dbService = {
   async ensureUser(clerkUserId: string) {
     try {
-      // First try to find the user
       let user = await prisma.user.findFirst({
         where: { clerkId: clerkUserId }
       });
 
-      // If user doesn't exist, create them instantly as possible 
       if (!user) {
         const clerkUser = await clerkClient.users.getUser(clerkUserId);
         user = await prisma.user.create({
@@ -33,17 +44,17 @@ export const dbService = {
     blogSlug: string;
     content: string;
     userId: string;
-    parentId?: string;
-  }) {
+    parentId?: string | null;
+  }): Promise<CommentWithUser> {
     try {
       const user = await this.ensureUser(data.userId);
       
-      const comment = await prisma.comment.create({
+      return await prisma.comment.create({
         data: {
           content: data.content,
           blogSlug: data.blogSlug,
           userId: user.id,
-          parentId: data.parentId,
+          parentId: data.parentId || null,
           likedBy: [],
         },
         include: {
@@ -56,8 +67,6 @@ export const dbService = {
           },
         },
       });
-
-      return comment;
     } catch (error) {
       console.error('Database error:', error);
       throw error;
@@ -93,17 +102,10 @@ export const dbService = {
               createdAt: 'desc',
             },
           },
-          _count: {
-            select: {
-              replies: true,
-            },
-          },
         },
-        orderBy: {
-          ...(sortBy === 'newest' && { createdAt: 'desc' }),
-          ...(sortBy === 'oldest' && { createdAt: 'asc' }),
-          ...(sortBy === 'mostLiked' && { likes: 'desc' }),
-        },
+        orderBy: sortBy === 'mostLiked' 
+          ? { likes: 'desc' }
+          : { createdAt: sortBy === 'newest' ? 'desc' : 'asc' },
       });
     } catch (error) {
       console.error('Database error:', error);
@@ -114,7 +116,7 @@ export const dbService = {
   async deleteComment(commentId: string, clerkUserId: string) {
     try {
       const user = await this.ensureUser(clerkUserId);
-      await prisma.comment.deleteMany({
+      return await prisma.comment.deleteMany({
         where: {
           id: commentId,
           userId: user.id,
@@ -131,10 +133,7 @@ export const dbService = {
       const user = await this.ensureUser(clerkUserId);
       const comment = await prisma.comment.findUnique({
         where: { id: commentId },
-        select: {
-          likes: true,
-          likedBy: true
-        }
+        select: { likes: true, likedBy: true }
       });
 
       if (!comment) throw new Error('Comment not found');
@@ -145,18 +144,11 @@ export const dbService = {
         where: { id: commentId },
         data: {
           likes: isLiked ? comment.likes - 1 : comment.likes + 1,
-          likedBy: isLiked
-            ? { set: comment.likedBy.filter(id => id !== user.id) }
-            : { push: user.id }
-        },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
+          likedBy: {
+            set: isLiked 
+              ? comment.likedBy.filter(id => id !== user.id)
+              : [...comment.likedBy, user.id]
+          }
         },
       });
 
@@ -180,4 +172,4 @@ export const dbService = {
       throw error;
     }
   },
-}; 
+};
