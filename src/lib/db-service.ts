@@ -1,21 +1,25 @@
-import { prisma } from '@/lib/prisma/index';
+import { prisma } from '@/utils/prisma';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { Prisma } from '@prisma/client';
+import { Comment, Prisma, User } from '@prisma/client';
 
-type CommentWithUser = Prisma.CommentGetPayload<{
-  include: {
-    user: {
-      select: {
-        name: true;
-        email: true;
-        image: true;
-      };
-    };
+// Define the comment type with user information
+type CommentWithUser = Comment & {
+  user: {
+    name: string | null;
+    email: string | null;
+    image: string | null;
   };
-}>;
+  replies?: (Comment & {
+    user: {
+      name: string | null;
+      email: string | null;
+      image: string | null;
+    };
+  })[];
+};
 
 export const dbService = {
-  async ensureUser(clerkUserId: string) {
+  async ensureUser(clerkUserId: string): Promise<User> {
     try {
       let user = await prisma.user.findFirst({
         where: { clerkId: clerkUserId }
@@ -49,7 +53,7 @@ export const dbService = {
     try {
       const user = await this.ensureUser(data.userId);
       
-      return await prisma.comment.create({
+      const comment = await prisma.comment.create({
         data: {
           content: data.content,
           blogSlug: data.blogSlug,
@@ -67,15 +71,17 @@ export const dbService = {
           },
         },
       });
+
+      return comment as CommentWithUser;
     } catch (error) {
       console.error('Database error:', error);
       throw error;
     }
   },
 
-  async getComments(blogSlug: string, sortBy: 'newest' | 'oldest' | 'mostLiked' = 'newest') {
+  async getComments(blogSlug: string, sortBy: 'newest' | 'oldest' | 'mostLiked' = 'newest'): Promise<CommentWithUser[]> {
     try {
-      return await prisma.comment.findMany({
+      const comments = await prisma.comment.findMany({
         where: {
           blogSlug,
           parentId: null,
@@ -107,6 +113,8 @@ export const dbService = {
           ? { likes: 'desc' }
           : { createdAt: sortBy === 'newest' ? 'desc' : 'asc' },
       });
+
+      return comments as CommentWithUser[];
     } catch (error) {
       console.error('Database error:', error);
       throw error;
@@ -128,7 +136,7 @@ export const dbService = {
     }
   },
 
-  async toggleLike(commentId: string, clerkUserId: string) {
+  async toggleLike(commentId: string, clerkUserId: string): Promise<{ likes: number; isLiked: boolean }> {
     try {
       const user = await this.ensureUser(clerkUserId);
       const comment = await prisma.comment.findUnique({
@@ -162,7 +170,7 @@ export const dbService = {
     }
   },
 
-  async getCommentCount(blogSlug: string) {
+  async getCommentCount(blogSlug: string): Promise<number> {
     try {
       return await prisma.comment.count({
         where: { blogSlug },
