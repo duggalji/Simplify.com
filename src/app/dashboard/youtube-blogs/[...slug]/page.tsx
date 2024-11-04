@@ -68,7 +68,7 @@ const formatBlogContent = (content: string): ReactNode[] => {
 
 export default function BlogPostPage() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const params = useParams();
   const [blog, setBlog] = useState<BlogPost | null>(null);
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([]);
@@ -82,39 +82,46 @@ export default function BlogPostPage() {
   // Load blog, comments, and check saved/following status
   useEffect(() => {
     const loadData = async () => {
-      // Load blog post
-      const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
-      const foundBlog = savedPosts.find((post: BlogPost) => post.slug === slug);
-      
-      if (foundBlog) {
-        foundBlog.pageViews = (foundBlog.pageViews || 0) + 1;
-        localStorage.setItem('blogPosts', JSON.stringify(
-          savedPosts.map((post: BlogPost) => 
-            post.slug === slug ? foundBlog : post
-          )
-        ));
-        
-        setBlog(foundBlog);
-        setIsSaved(foundBlog.savedBy?.includes(user?.id || ''));
-        setIsFollowing(foundBlog.followers?.includes(user?.id || ''));
+      if (!slug) return;
 
-        // Load comments
-        try {
-          const fetchedComments = await commentApi.getComments(slug);
-          const count = await commentApi.getCommentCount(slug);
-          setComments(fetchedComments);
-          setCommentCount(count);
-        } catch (error) {
-          console.error('Failed to load comments:', error);
-          toast.error('Failed to load comments');
+      try {
+        // Load blog post
+        const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
+        const foundBlog = savedPosts.find((post: BlogPost) => post.slug === slug);
+        
+        if (foundBlog) {
+          foundBlog.pageViews = (foundBlog.pageViews || 0) + 1;
+          localStorage.setItem('blogPosts', JSON.stringify(
+            savedPosts.map((post: BlogPost) => 
+              post.slug === slug ? foundBlog : post
+            )
+          ));
+          
+          setBlog(foundBlog);
+          if (user?.id) {
+            setIsSaved(foundBlog.savedBy?.includes(user.id) || false);
+            setIsFollowing(foundBlog.followers?.includes(user.id) || false);
+          }
+
+          // Load comments
+          try {
+            const fetchedComments = await commentApi.getComments(slug);
+            const count = await commentApi.getCommentCount(slug);
+            setComments(fetchedComments);
+            setCommentCount(count);
+          } catch (error) {
+            console.error('Failed to load comments:', error);
+            toast.error('Failed to load comments');
+          }
         }
+      } catch (error) {
+        console.error('Failed to load blog:', error);
+        toast.error('Failed to load blog post');
       }
     };
 
-    if (user) {
-      loadData();
-    }
-  }, [slug, user]);
+    loadData();
+  }, [slug, user?.id]);
 
   // Handle comment submission
   const handleCommentSubmit = async (content: string, parentId?: string) => {
@@ -190,22 +197,25 @@ export default function BlogPostPage() {
       return;
     }
 
-    const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
-    const updatedPosts = savedPosts.map((post: BlogPost) => {
-      if (post.slug === blog?.slug) {
-        const savedBy = post.savedBy || [];
-        if (isSaved) {
-          post.savedBy = savedBy.filter(id => id !== user.id);
-        } else {
-          post.savedBy = [...savedBy, user.id];
+    try {
+      const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
+      const updatedPosts = savedPosts.map((post: BlogPost) => {
+        if (post.slug === blog?.slug) {
+          const savedBy = post.savedBy || [];
+          post.savedBy = isSaved 
+            ? savedBy.filter(id => id !== user.id)
+            : [...savedBy, user.id];
         }
-      }
-      return post;
-    });
+        return post;
+      });
 
-    localStorage.setItem('blogPosts', JSON.stringify(updatedPosts));
-    setIsSaved(!isSaved);
-    toast.success(isSaved ? 'Post removed from saved' : 'Post saved successfully');
+      localStorage.setItem('blogPosts', JSON.stringify(updatedPosts));
+      setIsSaved(!isSaved);
+      toast.success(isSaved ? 'Post removed from saved' : 'Post saved successfully');
+    } catch (error) {
+      console.error('Failed to save post:', error);
+      toast.error('Failed to save post');
+    }
   };
 
   const handleFollow = () => {
@@ -248,6 +258,10 @@ export default function BlogPostPage() {
     router.push('/dashboard/youtube-blogs');
   };
 
+  if (!isLoaded) {
+    return <div>Loading...</div>;
+  }
+
   if (!blog) {
     return (
       <div className="max-w-4xl mx-auto py-12 px-4">
@@ -265,9 +279,9 @@ export default function BlogPostPage() {
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 pt-16"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="pt-16"
       >
         {/* Hero Section */}
         <div className="relative h-[70vh] w-full overflow-hidden mt-16">
@@ -398,15 +412,17 @@ export default function BlogPostPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <img 
-                      src={user?.imageUrl} 
-                      alt={user?.fullName || 'User'} 
+                      src={user?.imageUrl || '/default-avatar.png'} 
+                      alt={user?.fullName || 'Anonymous'} 
                       className="w-16 h-16 rounded-full border-2 border-purple-500 shadow-xl p-0.5 bg-white"
                     />
                     <div>
                       <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        Written by {user?.fullName}
+                        Written by {user?.fullName || 'Anonymous'}
                       </h3>
-                      <p className="text-gray-600">{user?.emailAddresses[0]?.emailAddress}</p>
+                      <p className="text-gray-600">
+                        {user?.emailAddresses?.[0]?.emailAddress || 'No email provided'}
+                      </p>
                     </div>
                   </div>
                   
@@ -511,8 +527,7 @@ export default function BlogPostPage() {
             commentCount={commentCount}
             onCommentSubmit={handleCommentSubmit}
             onCommentDelete={handleCommentDelete}
-            onCommentLike={handleCommentLike}
-            currentUser={user}
+            onCommentLike={handleCommentLike} currentUser={undefined}            
           />
         </div>
 

@@ -22,18 +22,21 @@ const getAuthStatus = async () => {
         try {
             const existingUser = await db.select()
                 .from(users)
-                .where(eq(users.clerkId, user.id))
+                .where(eq(users.id, user.id))
                 .execute();
 
             if (!existingUser.length) {
                 // Create new user
                 await db.insert(users).values({
-                    clerkId: user.id,
+                    id: user.id, // Using Clerk ID as primary key
                     email: email,
                     name: user.firstName || user.username || 'User',
                     profileImage: user.imageUrl || '',
                     createdAt: new Date(),
                     updatedAt: new Date(),
+                    points: 50, // Default value
+                    credits: 30, // Default value
+                    subscription: false // Default value
                 });
             } else {
                 // Update existing user
@@ -44,7 +47,7 @@ const getAuthStatus = async () => {
                         profileImage: user.imageUrl || existingUser[0].profileImage,
                         updatedAt: new Date(),
                     })
-                    .where(eq(users.clerkId, user.id));
+                    .where(eq(users.id, user.id));
             }
 
             return { success: true };

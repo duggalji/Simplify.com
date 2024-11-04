@@ -15,13 +15,11 @@ import { relations, InferModel } from 'drizzle-orm';
 
 // Base Users table
 export const users = pgTable('users', {
-  id: text('id').primaryKey(),  // Keep as text for Clerk compatibility
+  id: text('id').primaryKey().notNull(),  // This stores the Clerk ID
   name: text('name').notNull(),
   profileImage: text('profile_image'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  clerkId: text("clerk_id").unique().notNull(),
-  stripeCustomerId: text("stripe_customer_id").unique(),
   email: text("email").notNull().unique(),
   username: text("username").unique(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
@@ -99,3 +97,7 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;
 export type GeneratedContent = typeof generatedContent.$inferSelect;
 export type NewGeneratedContent = typeof generatedContent.$inferInsert;
+
+// Add type definitions
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
