@@ -124,6 +124,7 @@ export const dbService = {
       throw error;
     }
   },
+  //added new changes
 
   async deleteComment(commentId: string, clerkUserId: string) {
     try {
