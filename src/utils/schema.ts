@@ -9,6 +9,7 @@ import {
   varchar,
   decimal,
   serial,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { eq, sql } from "drizzle-orm";
 
@@ -59,16 +60,15 @@ export const generatedContent = pgTable("generated_content", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 //** email jobs table **//
-
 export const emailJobs = pgTable('email_jobs', {
   id: serial('id').primaryKey(),
-  email: varchar('email', { length: 255 }),
-  status: varchar('status', { length: 50 }),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  status: varchar('status', { length: 50 }).notNull().default('pending'),
+  ip: varchar('ip', { length: 45 }).notNull(),
+  recipientCount: serial('recipient_count').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
   sentAt: timestamp('sent_at'),
   error: text('error'),
-  ip: varchar('ip', { length: 45 }),
-  createdAt: timestamp('created_at').defaultNow(),
-  recipientCount: integer('recipient_count')
 });
 
 // Sessions table
