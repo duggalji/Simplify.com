@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
+import { db } from "@/lib/prisma/index";
 import { currentUser } from "@clerk/nextjs/server";
 
 // Add middleware to check authentication
