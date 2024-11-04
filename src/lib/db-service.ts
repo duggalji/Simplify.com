@@ -1,25 +1,33 @@
 import { prisma } from '@/utils/prisma';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { Comment, Prisma, User } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
-// Define the comment type with user information
-type CommentWithUser = Comment & {
-  user: {
-    name: string | null;
-    email: string | null;
-    image: string | null;
-  };
-  replies?: (Comment & {
+// Define the comment type using Prisma types
+type CommentWithUser = Prisma.CommentGetPayload<{
+  include: {
     user: {
-      name: string | null;
-      email: string | null;
-      image: string | null;
+      select: {
+        name: true;
+        email: true;
+        image: true;
+      };
     };
-  })[];
-};
+    replies: {
+      include: {
+        user: {
+          select: {
+            name: true;
+            email: true;
+            image: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 
 export const dbService = {
-  async ensureUser(clerkUserId: string): Promise<User> {
+  async ensureUser(clerkUserId: string): Promise<Prisma.UserGetPayload<{}>> {
     try {
       let user = await prisma.user.findFirst({
         where: { clerkId: clerkUserId }
