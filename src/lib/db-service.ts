@@ -2,32 +2,29 @@ import { prisma } from '@/utils/prisma';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import type { Prisma } from '@prisma/client';
 
-// Define the comment type using Prisma types
-type CommentWithUser = Prisma.CommentGetPayload<{
-  include: {
-    user: {
-      select: {
-        name: true;
-        email: true;
-        image: true;
-      };
-    };
-    replies: {
-      include: {
-        user: {
-          select: {
-            name: true;
-            email: true;
-            image: true;
-          };
-        };
-      };
-    };
-  };
-}>;
+// Define custom types for our use case
+interface UserInfo {
+  name: string | null;
+  email: string | null;
+  image: string | null;
+}
+
+interface CommentWithUser {
+  id: string;
+  content: string;
+  blogSlug: string;
+  userId: string;
+  parentId: string | null;
+  likes: number;
+  likedBy: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  user: UserInfo;
+  replies?: Array<CommentWithUser>;
+}
 
 export const dbService = {
-  async ensureUser(clerkUserId: string): Promise<Prisma.UserGetPayload<{}>> {
+  async ensureUser(clerkUserId: string) {
     try {
       let user = await prisma.user.findFirst({
         where: { clerkId: clerkUserId }
@@ -80,7 +77,7 @@ export const dbService = {
         },
       });
 
-      return comment as CommentWithUser;
+      return comment as unknown as CommentWithUser;
     } catch (error) {
       console.error('Database error:', error);
       throw error;
@@ -122,7 +119,7 @@ export const dbService = {
           : { createdAt: sortBy === 'newest' ? 'desc' : 'asc' },
       });
 
-      return comments as CommentWithUser[];
+      return comments as unknown as CommentWithUser[];
     } catch (error) {
       console.error('Database error:', error);
       throw error;
