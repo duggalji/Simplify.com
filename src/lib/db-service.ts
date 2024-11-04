@@ -1,6 +1,5 @@
 import { prisma } from '@/utils/prisma';
-import { auth, clerkClient } from '@clerk/nextjs/server';
-import type { Prisma } from '@prisma/client';
+import { clerkClient } from '@clerk/nextjs/server';
 //updated new changes 
 // Define custom types for our use case
 interface UserInfo {
@@ -159,7 +158,7 @@ export const dbService = {
           likes: isLiked ? comment.likes - 1 : comment.likes + 1,
           likedBy: {
             set: isLiked 
-              ? comment.likedBy.filter(id => id !== user.id)
+              ? comment.likedBy.filter((id: any) => id !== user.id)
               : [...comment.likedBy, user.id]
           }
         },
