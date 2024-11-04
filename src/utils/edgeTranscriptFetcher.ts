@@ -5,15 +5,20 @@ interface TranscriptSegment {
 }
 
 export async function fetchTranscriptEdge(videoId: string): Promise<string> {
-  const SERVERLESS_TIMEOUT = 8000; // 8 seconds max per request
+  const SERVERLESS_TIMEOUT = 5000; // Reduced for Vercel
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SERVERLESS_TIMEOUT);
+
   try {
-    // Try all methods in parallel for speed and reliability
+    // Modified parallel execution for Vercel
     const results = await Promise.allSettled([
-      fetchMethod1(videoId),
-      fetchMethod2(videoId),
-      fetchMethod3(videoId),
-      fetchMethod4(videoId)
+      fetchMethod1(videoId, controller.signal),
+      fetchMethod2(videoId, controller.signal),
+      fetchMethod3(videoId, controller.signal),
+      fetchMethod4(videoId, controller.signal)
     ]);
+
+    clearTimeout(timeoutId);
 
     // Get first successful result
     for (const result of results) {
@@ -24,16 +29,18 @@ export async function fetchTranscriptEdge(videoId: string): Promise<string> {
 
     throw new Error('No transcript available');
   } catch (error) {
+    clearTimeout(timeoutId);
     throw error;
   }
 }
 
 // Method 1: Direct YouTube API
-async function fetchMethod1(videoId: string): Promise<string> {
+async function fetchMethod1(videoId: string, signal: AbortSignal): Promise<string> {
   try {
     const response = await fetch(
       `https://www.youtube.com/watch?v=${videoId}`,
       {
+        signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
           'Accept-Language': 'en-US,en;q=0.9',
@@ -58,13 +65,13 @@ async function fetchMethod1(videoId: string): Promise<string> {
         if (match) {
           if (pattern.toString().includes('baseUrl')) {
             const captionUrl = match[1];
-            const transcript = await fetchCaptionUrl(captionUrl);
+            const transcript = await fetchCaptionUrl(captionUrl, signal);
             if (transcript) return transcript;
           } else {
             const data = JSON.parse(match[1].replace(/\\"/g, '"'));
             const captionUrl = extractCaptionUrl(data);
             if (captionUrl) {
-              const transcript = await fetchCaptionUrl(captionUrl);
+              const transcript = await fetchCaptionUrl(captionUrl, signal);
               if (transcript) return transcript;
             }
           }
@@ -73,17 +80,21 @@ async function fetchMethod1(videoId: string): Promise<string> {
         continue;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.log('Request timed out in method 1');
+    }
     return '';
   }
   return '';
 }
 
 // Method 2: Innertube API
-async function fetchMethod2(videoId: string): Promise<string> {
+async function fetchMethod2(videoId: string, signal: AbortSignal): Promise<string> {
   try {
     const response = await fetch('https://www.youtube.com/youtubei/v1/get_transcript', {
       method: 'POST',
+      signal,
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
@@ -92,39 +103,46 @@ async function fetchMethod2(videoId: string): Promise<string> {
         context: {
           client: {
             clientName: 'WEB',
-            clientVersion: '2.20240101'
+            clientVersion: '2.20240101',
+            hl: 'en',
+            gl: 'US'
           }
         },
-        videoId: videoId
+        params: btoa(`\n\x0b${videoId}`)
       })
     });
 
     const data = await response.json();
     return extractTranscriptFromInnertubeResponse(data);
-  } catch (e) {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.log('Request timed out in method 2');
+    }
     return '';
   }
 }
 
 // Method 3: Direct caption endpoints
-async function fetchMethod3(videoId: string): Promise<string> {
+async function fetchMethod3(videoId: string, signal: AbortSignal): Promise<string> {
   const urls = [
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&asr=1&lang=en`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&kind=asr&lang=en&fmt=srv3`
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=json3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&kind=asr&lang=en&fmt=json3`
   ];
 
   for (const url of urls) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       if (response.ok) {
         const text = await response.text();
         const transcript = parseTranscriptResponse(text);
         if (transcript) return transcript;
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        console.log('Request timed out in method 3');
+        break;
+      }
       continue;
     }
   }
@@ -132,9 +150,13 @@ async function fetchMethod3(videoId: string): Promise<string> {
 }
 
 // Method 4: Auto-generated captions
-async function fetchMethod4(videoId: string): Promise<string> {
+async function fetchMethod4(videoId: string, signal: AbortSignal): Promise<string> {
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}&bpctr=9999999999&has_verified=1`);
+    const response = await fetch(
+      `https://www.youtube.com/watch?v=${videoId}&bpctr=9999999999&has_verified=1`,
+      { signal }
+    );
+    
     const html = await response.text();
     
     const match = html.match(/"playerCaptionsTracklistRenderer".*?"adaptiveFormats":/);
@@ -144,27 +166,33 @@ async function fetchMethod4(videoId: string): Promise<string> {
       if (parsed.playerCaptionsTracklistRenderer?.captionTracks) {
         for (const track of parsed.playerCaptionsTracklistRenderer.captionTracks) {
           if (track.baseUrl) {
-            const transcript = await fetchCaptionUrl(track.baseUrl);
+            const transcript = await fetchCaptionUrl(track.baseUrl, signal);
             if (transcript) return transcript;
           }
         }
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.log('Request timed out in method 4');
+    }
     return '';
   }
   return '';
 }
 
 // Helper functions
-async function fetchCaptionUrl(url: string): Promise<string> {
+async function fetchCaptionUrl(url: string, signal?: AbortSignal): Promise<string> {
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (!response.ok) return '';
     
     const text = await response.text();
     return parseTranscriptResponse(text);
-  } catch (e) {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.log('Caption URL fetch timed out');
+    }
     return '';
   }
 }

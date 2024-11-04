@@ -28,6 +28,8 @@ model User {
 
   conversionMetrics ConversionMetric[]
 
+  comments Comment[]
+
   @@index(source)
   @@index(defaultWorkspace)
 }
@@ -87,4 +89,23 @@ model ConversionMetric {
 
   @@index([userId])
   @@index([createdAt])
+}
+//added comment table
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  blogSlug  String
+  userId    String
+  parentId  String?
+  likes     Int      @default(0)
+  likedBy   String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+
+  @@index([blogSlug])
+  @@index([userId])
+  @@index([parentId])
 }

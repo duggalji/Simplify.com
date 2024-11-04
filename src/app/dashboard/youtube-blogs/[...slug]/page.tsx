@@ -5,13 +5,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   EyeIcon, HeartIcon, CalendarIcon, UserIcon, ShareIcon, 
-  BookmarkIcon, LinkIcon, CheckIcon 
+  BookmarkIcon, LinkIcon, CheckIcon, ChatBubbleLeftIcon 
 } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import { useUser } from "@clerk/nextjs";
 import Navbar from "@/components/navigation/navbar";
 import { toast, Toaster } from 'react-hot-toast';
 import { BlogPost } from '@/types/blog';
+import { Comment, commentApi } from '@/lib/api-client';
+import { CommentSection } from '@/components/CommentSection';
 
 // Add this function to clean and format blog content
 const formatBlogContent = (content: string): ReactNode[] => {
@@ -73,16 +75,18 @@ export default function BlogPostPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentCount, setCommentCount] = useState(0);
   const slug = Array.isArray(params.slug) ? params.slug.join('/') : params.slug;
 
-  // Load blog and check saved/following status
+  // Load blog, comments, and check saved/following status
   useEffect(() => {
-    const loadBlog = () => {
+    const loadData = async () => {
+      // Load blog post
       const savedPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
       const foundBlog = savedPosts.find((post: BlogPost) => post.slug === slug);
       
       if (foundBlog) {
-        // Increment page views
         foundBlog.pageViews = (foundBlog.pageViews || 0) + 1;
         localStorage.setItem('blogPosts', JSON.stringify(
           savedPosts.map((post: BlogPost) => 
@@ -93,24 +97,92 @@ export default function BlogPostPage() {
         setBlog(foundBlog);
         setIsSaved(foundBlog.savedBy?.includes(user?.id || ''));
         setIsFollowing(foundBlog.followers?.includes(user?.id || ''));
+
+        // Load comments
+        try {
+          const fetchedComments = await commentApi.getComments(slug);
+          const count = await commentApi.getCommentCount(slug);
+          setComments(fetchedComments);
+          setCommentCount(count);
+        } catch (error) {
+          console.error('Failed to load comments:', error);
+          toast.error('Failed to load comments');
+        }
       }
     };
 
     if (user) {
-      loadBlog();
+      loadData();
     }
   }, [slug, user]);
 
-  // Load related posts
-  useEffect(() => {
-    if (blog) {
-      const allPosts = JSON.parse(localStorage.getItem('blogPosts') || '[]');
-      const related = allPosts
-        .filter((post: BlogPost) => post.slug !== blog.slug)
-        .slice(0, 3);
-      setRelatedPosts(related);
+  // Handle comment submission
+  const handleCommentSubmit = async (content: string, parentId?: string) => {
+    if (!user) {
+      toast.error('Please sign in to comment');
+      return;
     }
-  }, [blog]);
+
+    try {
+      await commentApi.createComment({
+        blogSlug: slug,
+        content,
+        parentId: parentId || null
+      });
+
+      // Refresh comments
+      const updatedComments = await commentApi.getComments(slug);
+      setComments(updatedComments);
+      const newCount = await commentApi.getCommentCount(slug);
+      setCommentCount(newCount);
+
+      toast.success('Comment posted successfully');
+    } catch (error) {
+      console.error('Failed to post comment:', error);
+      toast.error('Failed to post comment');
+    }
+  };
+
+  // Handle comment deletion
+  const handleCommentDelete = async (commentId: string) => {
+    if (!user) return;
+
+    try {
+      await commentApi.deleteComment(commentId, user.id);
+      
+      // Refresh comments
+      const updatedComments = await commentApi.getComments(slug);
+      setComments(updatedComments);
+      const newCount = await commentApi.getCommentCount(slug);
+      setCommentCount(newCount);
+
+      toast.success('Comment deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete comment:', error);
+      toast.error('Failed to delete comment');
+    }
+  };
+
+  // Handle comment like
+  const handleCommentLike = async (commentId: string) => {
+    if (!user) {
+      toast.error('Please sign in to like comments');
+      return;
+    }
+
+    try {
+      await commentApi.toggleLike(commentId, user.id);
+      
+      // Refresh comments
+      const updatedComments = await commentApi.getComments(slug);
+      setComments(updatedComments);
+
+      toast.success('Comment liked/unliked successfully');
+    } catch (error) {
+      console.error('Failed to like comment:', error);
+      toast.error('Failed to like comment');
+    }
+  };
 
   const handleSave = () => {
     if (!user) {
@@ -430,6 +502,18 @@ export default function BlogPostPage() {
         <div className="mt-4 flex items-center text-sm text-gray-500">
           <EyeIcon className="w-4 h-4 mr-1" />
           {blog?.pageViews || 0} page views
+        </div>
+
+        {/* Add Comment Section */}
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <CommentSection
+            comments={comments}
+            commentCount={commentCount}
+            onCommentSubmit={handleCommentSubmit}
+            onCommentDelete={handleCommentDelete}
+            onCommentLike={handleCommentLike}
+            currentUser={user}
+          />
         </div>
 
         {/* Add Toaster */}

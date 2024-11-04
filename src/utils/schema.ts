@@ -1,41 +1,39 @@
 import {
   boolean,
   integer,
-  json,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   varchar,
-  decimal,
   serial,
-  jsonb,
+  primaryKey,
+  PgColumn,
+  PgTableWithColumns,
 } from "drizzle-orm/pg-core";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { relations, InferModel } from 'drizzle-orm';
 
 // Base Users table
-export const users = pgTable("users", {
-  id: integer("id").primaryKey().notNull().default(sql`GENERATED ALWAYS AS IDENTITY`),
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),  // Keep as text for Clerk compatibility
+  name: text('name').notNull(),
+  profileImage: text('profile_image'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
   clerkId: text("clerk_id").unique().notNull(),
   stripeCustomerId: text("stripe_customer_id").unique(),
   email: text("email").notNull().unique(),
-  name: text("name").notNull().default(''),
   username: text("username").unique(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
   points: integer("points").notNull().default(50),
   credits: integer("credits").default(30),
-  profileImage: text("profile_image").default(''),
   subscription: boolean("subscription").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
 });
 
 // Subscriptions table
 export const subscriptions = pgTable("subscriptions", {
-  id: integer("id").primaryKey().notNull().default(sql`GENERATED ALWAYS AS IDENTITY`),
-  userId: integer("user_id")
+  id: serial("id").primaryKey(),
+  userId: text("user_id")  // Changed to text to match users.id
     .references(() => users.id, { onDelete: 'cascade' })
     .notNull(),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }).notNull(),
@@ -50,8 +48,8 @@ export const subscriptions = pgTable("subscriptions", {
 
 // Generated Content table
 export const generatedContent = pgTable("generated_content", {
-  id: integer("id").primaryKey().notNull().default(sql`GENERATED ALWAYS AS IDENTITY`),
-  userId: integer("user_id")
+  id: serial("id").primaryKey(),
+  userId: text("user_id")  // Changed to text to match users.id
     .references(() => users.id, { onDelete: 'cascade' })
     .notNull(),
   content: text("content").notNull(),
@@ -59,7 +57,8 @@ export const generatedContent = pgTable("generated_content", {
   contentType: varchar("content_type", { length: 50 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-//** email jobs table **//
+
+// Email jobs table
 export const emailJobs = pgTable('email_jobs', {
   id: serial('id').primaryKey(),
   email: varchar('email', { length: 255 }).notNull().unique(),
@@ -73,9 +72,9 @@ export const emailJobs = pgTable('email_jobs', {
 
 // Sessions table
 export const sessions = pgTable("sessions", {
-  id: integer("id").primaryKey().notNull().default(sql`GENERATED ALWAYS AS IDENTITY`),
+  id: serial("id").primaryKey(),
   sessionToken: text("session_token").unique().notNull(),
-  userId: integer("user_id")
+  userId: text("user_id")  // Changed to text to match users.id
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
   expires: timestamp("expires", { mode: "date" }).notNull(),
@@ -90,9 +89,8 @@ export const verificationTokens = pgTable("verification_tokens", {
   compositePk: primaryKey({ columns: [vt.identifier, vt.token] }),
 }));
 
-// Export types
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
+
+
 export type Session = typeof sessions.$inferSelect;
 export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type EmailJob = typeof emailJobs.$inferSelect;
