@@ -5,7 +5,15 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model: GenerativeModel = genAI.getGenerativeModel({ model: 'gemini-pro' });
+const model: GenerativeModel = genAI.getGenerativeModel({ 
+  model: 'gemini-pro',
+  generationConfig: {
+    temperature: 0.9,
+    topK: 40,
+    topP: 0.8,
+    maxOutputTokens: 4096, // Reduced maximum output
+  }
+});
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000;
@@ -13,13 +21,16 @@ const RETRY_DELAY = 1000;
 interface BlogPostStructure {
   title: string;
   introduction: string;
-  mainContent: string;
+  sections: {
+    heading: string;
+    content: string;
+  }[];
   conclusion: string;
 }
 
 export async function summarizeWithGemini(transcript: string): Promise<string> {
   if (!transcript || typeof transcript !== 'string') {
-    throw new Error('Invalid transcript provided?');
+    throw new Error('Invalid transcript provided');
   }
 
   let attempt = 0;
@@ -27,33 +38,69 @@ export async function summarizeWithGemini(transcript: string): Promise<string> {
   while (attempt < RETRY_ATTEMPTS) {
     try {
       const prompt = `
-        Please convert this video transcript into a well-structured blog post.
+        Create an extremely detailed, long-form blog post from this video transcript.
         
-        CRITICAL FORMATTING REQUIREMENTS:
-        - Output PURE TEXT ONLY
-        - NO special characters (*, #, -, etc.)
-        - NO markdown syntax
-        - NO bullet points or numbering
-        - NO formatting symbols of any kind
+        CRITICAL REQUIREMENTS:
+        1. Length: Minimum 2000 words
+        2. Depth: Extremely detailed analysis and expansion of ideas
+        3. Structure: Multiple detailed sections with clear transitions
         
-        Structure Requirements:
-        1. Start with a clear title on the first line
-        2. Follow with an introduction paragraph
-        3. Add main content sections with clear headings (plain text)
-        4. End with a conclusion
+        FORMAT REQUIREMENTS:
+        - Pure text only, no special characters
+        - No markdown or formatting symbols
+        - Natural paragraph breaks only
         
-        Style Requirements:
-        - Ultra-modern, professional writing style
-        - Clear section transitions
-        - Engaging, sophisticated tone
-        - Clean paragraph breaks
-        - Professional formatting
-        -make it professional and friendly
+        CONTENT STRUCTURE:
+        1. Compelling Title (Make it SEO-friendly and engaging)
         
-        Remember: Output should be COMPLETELY FREE of any special characters or formatting symbols.
-        Just pure, clean, professional text with natural paragraph breaks.
+        2. Introduction (3-4 paragraphs):
+        - Hook the reader
+        - Provide context
+        - Preview main points
+        - Set expectations
         
-        Transcript:
+        3. Main Content (6-8 major sections):
+        - Each section should be 300-400 words
+        - Include relevant examples
+        - Expand on transcript points
+        - Add expert insights
+        - Include practical applications
+        - Discuss implications
+        
+        4. Detailed Analysis:
+        - Deep dive into key concepts
+        - Real-world applications
+        - Expert perspectives
+        - Industry relevance
+        
+        5. Extended Discussion:
+        - Broader implications
+        - Future trends
+        - Related concepts
+        - Expert opinions
+        
+        6. Comprehensive Conclusion:
+        - Summarize key insights
+        - Provide actionable takeaways
+        - End with thought-provoking statement
+        
+        STYLE GUIDELINES:
+        - Professional yet engaging tone
+        - Use storytelling techniques
+        - Include expert perspectives
+        - Add relevant statistics when possible
+        - Make complex ideas accessible
+        - Use clear transitions between sections
+        - Maintain reader engagement throughout
+        
+        IMPORTANT:
+        - Expand significantly beyond the transcript
+        - Add relevant context and background
+        - Include industry insights
+        - Make it extremely comprehensive
+        - Focus on depth and value
+        
+        Transform this transcript into a professional, extremely detailed blog post:
         ${transcript}
       `;
 
@@ -61,16 +108,14 @@ export async function summarizeWithGemini(transcript: string): Promise<string> {
       const response = await result.response;
       const text = response.text();
       
-      if (!text) {
-        throw new Error('Empty response from Gemini');
+      if (!text || text.length < 2000) {
+        throw new Error('Generated content too short');
       }
 
-      // Try to parse the response into a structured format
       try {
         const structuredPost = parseIntoStructure(text);
         return formatBlogPost(structuredPost);
       } catch {
-        // If parsing fails, return the raw text
         return text;
       }
 
@@ -82,7 +127,6 @@ export async function summarizeWithGemini(transcript: string): Promise<string> {
         throw new Error('Failed to generate blog post after multiple attempts');
       }
       
-      // Exponential backoff
       await new Promise(resolve => 
         setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt - 1))
       );
@@ -93,39 +137,63 @@ export async function summarizeWithGemini(transcript: string): Promise<string> {
 }
 
 function parseIntoStructure(text: string): BlogPostStructure {
-  const sections = text.split('\n\n');
+  const sections = text.split('\n\n').filter(Boolean);
   
-  // Clean all markdown symbols
   const cleanText = (text: string) => {
     return text
-      .replace(/[#*`]/g, '')  // Remove #, *, and ` characters
-      .replace(/^\s*[-•]\s*/gm, '') // Remove list markers
-      .replace(/\n{3,}/g, '\n\n')  // Normalize multiple line breaks
+      .replace(/[#*`]/g, '')
+      .replace(/^\s*[-•]\s*/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
   };
+
+  // Extract sections with headings
+  const mainSections = [];
+  let currentSection = { heading: '', content: '' };
+  
+  for (let i = 2; i < sections.length - 1; i++) {
+    const section = cleanText(sections[i]);
+    if (section.length < 50 && i < sections.length - 2) {
+      // This is likely a heading
+      if (currentSection.heading) {
+        mainSections.push(currentSection);
+      }
+      currentSection = { heading: section, content: '' };
+    } else {
+      currentSection.content += (currentSection.content ? '\n\n' : '') + section;
+    }
+  }
+  
+  if (currentSection.heading) {
+    mainSections.push(currentSection);
+  }
   
   return {
     title: cleanText(sections[0] || 'Untitled Post'),
     introduction: cleanText(sections[1] || ''),
-    mainContent: cleanText(sections.slice(2, -1).join('\n\n')),
+    sections: mainSections,
     conclusion: cleanText(sections[sections.length - 1] || '')
   };
 }
 
 function formatBlogPost(structure: BlogPostStructure): string {
+  const formattedSections = structure.sections
+    .map(section => `${section.heading}\n\n${section.content}`)
+    .join('\n\n');
+
   return `
 ${structure.title}
 
 ${structure.introduction}
 
-${structure.mainContent}
+${formattedSections}
 
 Conclusion
+
 ${structure.conclusion}
   `.trim();
 }
 
-// Helper function to handle API errors
 export function isGeminiError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes('Gemini');
-} 
+}

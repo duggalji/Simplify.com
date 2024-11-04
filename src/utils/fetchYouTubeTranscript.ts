@@ -1,43 +1,59 @@
-import { YoutubeTranscript } from 'youtube-transcript';
+import { fetchTranscriptEdge } from './edgeTranscriptFetcher';
+
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 2000;
+const MAX_TIMEOUT = 30000; // 30 seconds max timeout
 
 export default async function fetchYouTubeTranscript(videoId: string): Promise<string> {
-  if (!videoId) {
-    throw new Error('Video ID is required');
+  if (!videoId?.trim()) {
+    throw new Error('Valid video ID is required');
   }
 
-  try {
-    const cleanVideoId = videoId.trim();
-    
-    // Single attempt with timeout for serverless
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Transcript fetch timeout')), 8000);
-    });
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), MAX_TIMEOUT);
 
-    const transcriptPromise = YoutubeTranscript.fetchTranscript(cleanVideoId);
-    
-    const transcriptResponse = await Promise.race([
-      transcriptPromise,
-      timeoutPromise
-    ]) as any[];
+      try {
+        console.log(`Attempting to fetch transcript (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        
+        const transcript = await fetchTranscriptEdge(videoId.trim());
+        clearTimeout(timeoutId);
 
-    if (!transcriptResponse || !Array.isArray(transcriptResponse) || transcriptResponse.length === 0) {
-      throw new Error('No transcript available');
+        if (!transcript || transcript.length < 100) { // Increased minimum length
+          throw new Error('Retrieved transcript is too short or empty');
+        }
+
+        console.log('Successfully fetched transcript');
+        return transcript;
+
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+      }
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      console.error(`Transcript fetch attempt ${attempt + 1} failed:`, {
+        error: lastError.message,
+        videoId,
+        attempt: attempt + 1,
+        timestamp: new Date().toISOString()
+      });
+
+      if (attempt === MAX_RETRIES - 1) {
+        throw new Error(`Failed to fetch transcript after ${MAX_RETRIES} attempts: ${lastError.message}`);
+      }
+
+      // Exponential backoff with jitter
+      const delay = INITIAL_DELAY * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5);
+      console.log(`Waiting ${Math.round(delay)}ms before next attempt...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-
-    const fullTranscript = transcriptResponse
-      .map(item => item.text)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!fullTranscript) {
-      throw new Error('Empty transcript received');
-    }
-
-    return fullTranscript;
-
-  } catch (error) {
-    console.error('Transcript fetch error:', error);
-    throw new Error('Failed to fetch video transcript');
   }
+
+  throw lastError || new Error('Failed to fetch transcript after all attempts');
 } 

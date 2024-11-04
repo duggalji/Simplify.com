@@ -38,34 +38,13 @@ const RequestSchema = z.object({
 
 // Update these exports for better serverless compatibility
 export const runtime = 'edge';  // Edge runtime is faster for serverless
-export const maxDuration = 30;  // Reduced to 30 seconds which is safer for serverless
+export const maxDuration = 60;  // Increased to 60 seconds for long videos
 export const preferredRegion = 'auto';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
-  try {
-    // Shorter timeout for serverless
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 29000); // 29s timeout
-    });
-
-    const responsePromise = handleRequest(req);
-    const response = await Promise.race([responsePromise, timeoutPromise]);
-    return response as NextResponse<SuccessResponse | ErrorResponse>;
-    
-  } catch (error) {
-    console.error('API Error:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      type: error instanceof Error ? error.constructor.name : typeof error
-    });
-
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'An unexpected error occurred'
-    }, { status: 500 });
-  }
-}
-
-async function handleRequest(req: NextRequest): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
+  const startTime = Date.now();
+  
   try {
     const body = await req.json().catch(() => ({}));
     const result = RequestSchema.safeParse(body);
@@ -79,40 +58,61 @@ async function handleRequest(req: NextRequest): Promise<NextResponse<SuccessResp
     const videoId = extractVideoId(result.data.videoUrl);
     if (!videoId) {
       return NextResponse.json({
-        error: 'Could not extract valid video ID from URL.'
+        error: 'Could not extract valid video ID from URL'
       }, { status: 400 });
     }
 
-    // Sequential fetching instead of parallel for better reliability
-    console.log('Fetching transcript...');
-    const transcript = await fetchYouTubeTranscript(videoId);
-    
-    console.log('Fetching metadata...');
-    const metadata = await fetchYouTubeMetadata(videoId);
+    // Parallel fetching with individual timeouts
+    const [transcript, metadata] = await Promise.all([
+      fetchYouTubeTranscript(videoId).catch(error => {
+        console.error('Transcript fetch failed:', error);
+        throw new Error('Could not fetch video transcript');
+      }),
+      fetchYouTubeMetadata(videoId).catch(() => null)
+    ]);
 
-    if (!transcript || transcript.trim().length === 0) {
+    if (!transcript) {
       return NextResponse.json({
-        error: 'Empty transcript received'
+        error: 'Failed to get video transcript'
       }, { status: 500 });
     }
 
-    console.log('Generating blog post...');
+    // Check remaining time for Gemini processing
+    const remainingTime = 58000 - (Date.now() - startTime);
+    if (remainingTime < 10000) {
+      throw new Error('Insufficient time remaining for processing');
+    }
+
     const blogPost = await summarizeWithGemini(transcript);
-    if (!blogPost || blogPost.trim().length === 0) {
-      return NextResponse.json({
-        error: 'Failed to generate blog post'
-      }, { status: 500 });
-    }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       blogPost,
-      metadata
-    }, { status: 200 });
+      metadata: metadata || {
+        thumbnail: '',
+        views: '0',
+        likes: '0',
+        title: 'Title unavailable',
+        channelTitle: 'Unknown Channel',
+        publishedAt: new Date().toLocaleDateString()
+      }
+    }, { 
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store, private',
+        'Content-Type': 'application/json'
+      }
+    });
 
   } catch (error) {
-    console.error('Request handling error:', error);
+    console.error('API Error:', {
+      error,
+      timestamp: new Date().toISOString(),
+      duration: `${Date.now() - startTime}ms`,
+      url: req.url
+    });
+
     return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Failed to process request we are so sorry'
+      error: error instanceof Error ? error.message : 'An unexpected error occurred'
     }, { status: 500 });
   }
 }
