@@ -36,84 +36,89 @@ const RequestSchema = z.object({
     )
 });
 
-// Update these exports for better serverless compatibility
-export const runtime = 'edge';  // Edge runtime is faster for serverless
-export const maxDuration = 60;  // Increased to 60 seconds for long videos
-export const preferredRegion = 'auto';
+// Update these exports for Vercel serverless
+export const runtime = 'edge';  // Use edge runtime for better performance
+export const maxDuration = 25;  // Reduced to be safe
+export const preferredRegion = 'auto';  // Let Vercel choose the best region
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
   
   try {
-    const body = await req.json().catch(() => ({}));
-    const result = RequestSchema.safeParse(body);
-
-    if (!result.success) {
-      return NextResponse.json({
-        error: `Invalid request: ${result.error.errors[0].message}`
-      }, { status: 400 });
-    }
-
-    const videoId = extractVideoId(result.data.videoUrl);
-    if (!videoId) {
-      return NextResponse.json({
-        error: 'Could not extract valid video ID from URL'
-      }, { status: 400 });
-    }
-
-    // Parallel fetching with individual timeouts
-    const [transcript, metadata] = await Promise.all([
-      fetchYouTubeTranscript(videoId).catch(error => {
-        console.error('Transcript fetch failed:', error);
-        throw new Error('Could not fetch video transcript');
-      }),
-      fetchYouTubeMetadata(videoId).catch(() => null)
-    ]);
-
-    if (!transcript) {
-      return NextResponse.json({
-        error: 'Failed to get video transcript'
-      }, { status: 500 });
-    }
-
-    // Check remaining time for Gemini processing
-    const remainingTime = 58000 - (Date.now() - startTime);
-    if (remainingTime < 10000) {
-      throw new Error('Insufficient time remaining for processing');
-    }
-
-    const blogPost = await summarizeWithGemini(transcript);
-
-    return NextResponse.json({
-      blogPost,
-      metadata: metadata || {
-        thumbnail: '',
-        views: '0',
-        likes: '0',
-        title: 'Title unavailable',
-        channelTitle: 'Unknown Channel',
-        publishedAt: new Date().toLocaleDateString()
-      }
-    }, { 
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-store, private',
-        'Content-Type': 'application/json'
-      }
+    // Shorter timeout for Vercel
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 20000); // 20 seconds max
     });
 
+    const responsePromise = (async () => {
+      // Add early timeout check
+      if (Date.now() - startTime > 18000) { // 18 seconds
+        throw new Error('Time limit approaching');
+      }
+
+      const body = await req.json().catch(() => ({}));
+      const result = RequestSchema.safeParse(body);
+
+      if (!result.success) {
+        return NextResponse.json({
+          error: `Invalid request: ${result.error.errors[0].message}`
+        } as ErrorResponse, { status: 400 });
+      }
+
+      const videoId = extractVideoId(result.data.videoUrl);
+      if (!videoId) {
+        return NextResponse.json({
+          error: 'Could not extract valid video ID from URL'
+        }, { status: 400 });
+      }
+
+      // Sequential processing instead of parallel
+      const transcript = await fetchYouTubeTranscript(videoId);
+      
+      // Check time again before heavy processing
+      if (Date.now() - startTime > 15000) { // 15 seconds
+        throw new Error('Insufficient time for processing');
+      }
+
+      const blogPost = await summarizeWithGemini(transcript);
+      
+      // Get metadata last since it's optional
+      const metadata = await fetchYouTubeMetadata(videoId).catch(() => null);
+
+      return NextResponse.json({
+        blogPost,
+        metadata: metadata || {
+          thumbnail: '',
+          views: '0',
+          likes: '0',
+          title: 'Title unavailable',
+          channelTitle: 'Unknown Channel',
+          publishedAt: new Date().toLocaleDateString()
+        }
+      } as SuccessResponse, { 
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store, private',
+          'Content-Type': 'application/json'
+        }
+      });
+    })();
+
+    return await Promise.race([responsePromise, timeoutPromise]);
   } catch (error) {
+    // Improved error handling
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     console.error('API Error:', {
-      error,
+      error: errorMessage,
       timestamp: new Date().toISOString(),
       duration: `${Date.now() - startTime}ms`,
       url: req.url
     });
 
     return NextResponse.json({
-      error: error instanceof Error ? error.message : 'An unexpected error occurred'
-    }, { status: 500 });
+      error: errorMessage
+    } as ErrorResponse, { status: 500 });
   }
 }
 

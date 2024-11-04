@@ -1,7 +1,7 @@
 // Create a new file for metadata fetching
 export async function fetchYouTubeMetadata(videoId: string) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduced to 5s
 
   try {
     if (!process.env.YOUTUBE_API_KEY) {
@@ -44,7 +44,7 @@ export async function fetchYouTubeMetadata(videoId: string) {
   } catch (error) {
     clearTimeout(timeoutId);
     console.error('Metadata fetch error:', error);
-    throw new Error('Failed to fetch video metadata');
+    return null;
   }
 }
 

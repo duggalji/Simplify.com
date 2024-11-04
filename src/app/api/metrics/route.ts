@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     try {
       const [allTimeMetrics, todayMetrics] = await Promise.all([
-        db.conversionMetric.aggregate({
+        db.ConversionMetric.aggregate({
           where: { 
             userId: user.id, 
             createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } 
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
           },
           _sum: { contentSize: true, apiCalls: true }
         }),
-        db.conversionMetric.count({ 
+        db.ConversionMetric.count({ 
           where: { 
             userId: user.id, 
             createdAt: { gte: today } 
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     const compressionRatio = calculateCompressionRatio(contentSize, outputSize);
     const performanceMetrics = calculatePerformanceMetrics(processingTime, complexityScore);
 
-    const metric = await db.conversionMetric.create({
+    const metric = await db.ConversionMetric.create({
       data: {
         userId: user.id,
         contentSize,

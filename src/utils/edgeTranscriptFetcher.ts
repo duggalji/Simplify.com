@@ -5,25 +5,28 @@ interface TranscriptSegment {
 }
 
 export async function fetchTranscriptEdge(videoId: string): Promise<string> {
-  const SERVERLESS_TIMEOUT = 5000; // Reduced for Vercel
+  const SERVERLESS_TIMEOUT = 3000; // Reduced from 5000 to 3000 for Vercel
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SERVERLESS_TIMEOUT);
 
   try {
-    // Modified parallel execution for Vercel
-    const results = await Promise.allSettled([
-      fetchMethod1(videoId, controller.signal),
-      fetchMethod2(videoId, controller.signal),
-      fetchMethod3(videoId, controller.signal),
-      fetchMethod4(videoId, controller.signal)
-    ]);
+    // Execute methods sequentially instead of parallel for better reliability
+    const methods = [
+      () => fetchMethod1(videoId, controller.signal),
+      () => fetchMethod2(videoId, controller.signal),
+      () => fetchMethod3(videoId, controller.signal),
+      () => fetchMethod4(videoId, controller.signal)
+    ];
 
-    clearTimeout(timeoutId);
-
-    // Get first successful result
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        return result.value;
+    for (const method of methods) {
+      try {
+        const result = await method();
+        if (result) {
+          clearTimeout(timeoutId);
+          return result;
+        }
+      } catch (e) {
+        continue; // Try next method if current fails
       }
     }
 

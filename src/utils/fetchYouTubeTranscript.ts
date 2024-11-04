@@ -1,8 +1,8 @@
 import { fetchTranscriptEdge } from './edgeTranscriptFetcher';
 
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 2000;
-const MAX_TIMEOUT = 30000; // 30 seconds max timeout
+const MAX_RETRIES = 1;
+const INITIAL_DELAY = 500;
+const MAX_TIMEOUT = 8000; // 8 seconds max timeout
 
 export default async function fetchYouTubeTranscript(videoId: string): Promise<string> {
   if (!videoId?.trim()) {
