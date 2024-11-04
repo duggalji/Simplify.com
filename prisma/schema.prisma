@@ -90,7 +90,7 @@ model ConversionMetric {
   @@index([userId])
   @@index([createdAt])
 }
-//added comment table
+//added comment and like table on our database
 model Comment {
   id        String   @id @default(cuid())
   content   String

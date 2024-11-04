@@ -9,7 +9,7 @@ export const dbService = {
         where: { clerkId: clerkUserId }
       });
 
-      // If user doesn't exist, create them
+      // If user doesn't exist, create them instantly as possible 
       if (!user) {
         const clerkUser = await clerkClient.users.getUser(clerkUserId);
         user = await prisma.user.create({
