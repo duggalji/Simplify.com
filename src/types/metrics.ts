@@ -12,4 +12,5 @@ export interface DashboardMetrics {
   overallPerformance: number;
   averageDataQuality: number;
   averageOutputQuality: number;
+ 
 } 

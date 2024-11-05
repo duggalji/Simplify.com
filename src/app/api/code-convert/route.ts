@@ -20,27 +20,17 @@ function isValidHttpsUrl(urlString: string): boolean {
 
 // Super robust code extraction
 async function extractCodeFromUrl(url: string): Promise<string[]> {
-  const codeBlocks: Set<string> = new Set(); // Use Set to avoid duplicates
+  const codeBlocks: Set<string> = new Set();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
   
   try {
-    // Multiple fetch attempts with different headers
+    // Simplified fetch attempts with better timeouts
     const fetchAttempts = [
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        }
-      },
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
-          'Accept': 'text/html,*/*',
-        }
-      },
-      {
-        headers: {
-          'User-Agent': 'Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': '*/*',
         }
       }
     ];
@@ -48,12 +38,12 @@ async function extractCodeFromUrl(url: string): Promise<string[]> {
     let html = '';
     let fetchSuccess = false;
 
-    // Try different fetch configurations
+    // Try fetch with timeout
     for (const config of fetchAttempts) {
       try {
         const response = await fetch(url, {
           ...config,
-          next: { revalidate: 0 },
+          signal: controller.signal,
           cache: 'no-store'
         });
 
@@ -63,13 +53,14 @@ async function extractCodeFromUrl(url: string): Promise<string[]> {
           break;
         }
       } catch (e) {
-        console.warn('Fetch attempt failed, trying next configuration...');
         continue;
       }
     }
 
+    clearTimeout(timeoutId);
+
     if (!fetchSuccess) {
-      throw new Error('All fetch attempts failed');
+      throw new Error('Failed to fetch URL');
     }
 
     const $ = cheerio.load(html);
@@ -175,8 +166,8 @@ async function extractCodeFromUrl(url: string): Promise<string[]> {
     return validatedBlocks;
 
   } catch (error) {
-    console.error('Extraction error:', error);
-    throw new Error(`Failed to extract code: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    clearTimeout(timeoutId);
+    throw error;
   }
 }
 
@@ -363,26 +354,42 @@ const LANGUAGE_PROMPTS = {
     Provide the enhanced Java version with proper structure.`
 };
 
-// Update the POST handler to use these prompts
+// Add these exports for Vercel
+export const runtime = 'edge';
+export const maxDuration = 15; // Set maximum duration to 15 seconds
+export const dynamic = 'force-dynamic';
+
+// Update the POST handler with better error handling and timeouts
 export async function POST(request: NextRequest) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
   try {
     const body = await request.json();
     const { url, code, targetLanguage } = body;
 
     let codeToProcess: string[] = [];
 
-    // Handle direct code input
+    // Handle direct code input with size limit
     if (code) {
+      if (code.length > 50000) { // Add size limit
+        throw new Error('Code input too large');
+      }
       codeToProcess = [code];
     } 
     // Handle URL input
     else if (url) {
+      if (!isValidHttpsUrl(url)) {
+        throw new Error('Invalid URL provided');
+      }
+
       try {
         const response = await fetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
             'Accept': '*/*'
           },
+          signal: controller.signal,
           cache: 'no-store'
         });
 
@@ -391,84 +398,51 @@ export async function POST(request: NextRequest) {
         }
 
         const html = await response.text();
+        if (html.length > 100000) { // Add size limit
+          throw new Error('URL content too large');
+        }
+
         const $ = cheerio.load(html);
         const codeElements = new Set<string>();
-        // Extract all possible code without strict validation
-        const extractText = (el: cheerio.Cheerio<any>) => {
+
+        // Simplified extraction logic
+        $('pre, code, .highlight').each((_, el) => {
           const text = $(el).text().trim()
             .replace(/^\s+|\s+$/g, '')
             .replace(/\t/g, '  ')
             .replace(/\r\n/g, '\n');
           
-          if (text.length > 0) {
+          if (text.length > 0 && text.length < 50000) { // Add size limit
             codeElements.add(text);
           }
-        };
-
-        // Extract from all possible code containers
-        $('pre, code, .highlight, [class*="code"], [class*="language-"], .blob-wrapper, .js-file-line-container').each((_, el) => {
-          extractText($(el));
         });
 
-        // Extract from data attributes
-        $('[data-code], [data-content], [data-source]').each((_, el) => {
-          const dataContent = $(el).data('code') || $(el).data('content') || $(el).data('source');
-          if (dataContent) codeElements.add(String(dataContent));
-        });
-
-        // Extract from markdown-style code blocks
-        const bodyText = $('body').text();
-        const codeBlockMatches = bodyText.match(/```[\s\S]+?```/g);
-        if (codeBlockMatches) {
-          codeBlockMatches.forEach(block => {
-            codeElements.add(block.replace(/```/g, '').trim());
-          });
-        }
-
-        // If still no code found, get content from specific elements
-        if (codeElements.size === 0) {
-          $('.blob-code-inner, .js-file-line, pre, code, .highlight').each((_, el) => {
-            extractText($(el));
-          });
-        }
-
-        // If still nothing, try getting any content that might be code
-        if (codeElements.size === 0) {
-          $('body *').each((_, el) => {
-            const text = $(el).text().trim();
-            if (text.length > 0) {
-              codeElements.add(text);
-            }
-          });
-        }
-
-        // Convert to array and filter empty strings
         codeToProcess = Array.from(codeElements).filter(text => text.length > 0);
 
-        // If still no content, use raw HTML
         if (codeToProcess.length === 0) {
-          codeToProcess = [html];
+          throw new Error('No code found in URL');
         }
 
       } catch (error) {
+        clearTimeout(timeoutId);
         return NextResponse.json(
-          { success: false, error: `Failed to process URL: ${error instanceof Error ? error.message : String(error)}` },
-          { status: 500 }
+          { success: false, error: `URL processing failed: ${error instanceof Error ? error.message : String(error)}` },
+          { status: 400 }
         );
       }
     } else {
+      clearTimeout(timeoutId);
       return NextResponse.json(
         { success: false, error: 'Either code or URL is required' },
         { status: 400 }
       );
     }
 
-    // Initialize Gemini
+    // Initialize Gemini with timeout
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    // Process the first valid code block
     try {
-      const codeBlock = codeToProcess[0]; // Take the first block
+      const codeBlock = codeToProcess[0];
       const prompt = LANGUAGE_PROMPTS[targetLanguage as keyof typeof LANGUAGE_PROMPTS]
         ?.replace('{{CODE}}', codeBlock) || 
         `Convert this code to ${targetLanguage}:\n${codeBlock}`;
@@ -480,6 +454,7 @@ export async function POST(request: NextRequest) {
         .replace(/```$/g, '')
         .trim();
 
+      clearTimeout(timeoutId);
       return NextResponse.json({
         success: true,
         code: convertedCode,
@@ -488,20 +463,20 @@ export async function POST(request: NextRequest) {
       });
 
     } catch (error) {
-      console.error('Conversion error:', error);
+      clearTimeout(timeoutId);
       return NextResponse.json(
         { 
           success: false, 
-          error: `Failed to convert code: ${error instanceof Error ? error.message : String(error)}` 
+          error: `Code conversion failed: ${error instanceof Error ? error.message : String(error)}` 
         },
         { status: 500 }
       );
     }
 
   } catch (error) {
-    console.error('Processing error:', error);
+    clearTimeout(timeoutId);
     return NextResponse.json(
-      { success: false, error: 'Failed to process request' },
+      { success: false, error: 'Request processing failed' },
       { status: 500 }
     );
   }

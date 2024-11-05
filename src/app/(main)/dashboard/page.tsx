@@ -12,7 +12,7 @@ import { motion } from "framer-motion"
 import { toast } from "sonner"
 import Navbar from "@/components/navigation/navbar"
 import { DashboardMetrics } from "@/types/metrics"
-import Footer from "@/components/navigation/footer"
+
 
 const DashboardPage = () => {
     const router = useRouter()
@@ -92,7 +92,7 @@ const DashboardPage = () => {
 
     if (!isLoaded) {
         return <div className="flex justify-center items-center min-h-screen">
-            <Skeleton className="h-32 w-32 rounded-full" />
+            <Skeleton className="rounded-full w-32 h-32" />
         </div>
     }
 
@@ -102,24 +102,24 @@ const DashboardPage = () => {
     }
 
     return (
-        <div className="sticky top-0 z-50 bg-black ">
+        <div className="top-0 z-50 sticky bg-black">
             <Navbar/>
       
-            <div className="flex min-h-screen bg-white">
+            <div className="flex bg-white min-h-screen">
                 <ModernSidebar />
             
-                <div className="flex-grow p-8 bg-white">
-                    <div className="max-w-7xl mx-auto">
+                <div className="flex-grow bg-white p-8">
+                    <div className="mx-auto max-w-7xl">
                         {/* Header Section */}
                         <motion.div 
                             initial={{ opacity: 0, y: -20 }}
                             animate={{ opacity: 1, y: 0 }}
                             className="mb-8"
                         >
-                            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 text-transparent bg-clip-text">
-                                Welcome back, {user?.firstName || 'User'}!
+                            <h1 className="bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 font-bold text-6xl text-transparent">
+                                Welcome back, {user?.firstName || 'User'}👋🏻🎉!
                             </h1>
-                            <p className="text-gray-500 dark:text-gray-400 mt-2">
+                            <p className="mt-2 text-gray-900 dark:text-gray-400">
                                 Heres an overview of your activity and conversion tools
                             </p>
                         </motion.div>
@@ -129,13 +129,13 @@ const DashboardPage = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
+                            className="gap-6 grid grid-cols-1 md:grid-cols-4 mb-8"
                         >
                             {loading ? (
                                 [...Array(4)].map((_, i) => (
-                                    <Card key={i} className="p-6 backdrop-blur-sm bg-white/50 dark:bg-gray-900/50">
-                                        <Skeleton className="h-8 w-24 mb-2" />
-                                        <Skeleton className="h-6 w-16" />
+                                    <Card key={i} className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm p-6">
+                                        <Skeleton className="mb-2 w-24 h-8" />
+                                        <Skeleton className="w-16 h-6" />
                                     </Card>
                                 ))
                             ) : (
@@ -192,7 +192,7 @@ const DashboardPage = () => {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.4 }}
                         >
-                            <Card className="p-6 backdrop-blur-sm bg-white/50 dark:bg-gray-900/50">
+                            <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm p-6">
                                 <JsonConverter />
                             </Card>
                         </motion.div>
@@ -206,7 +206,7 @@ const DashboardPage = () => {
                         >
                             <Button 
                                 onClick={() => router.push("/new-project")}
-                                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 hover:from-purple-700 to-blue-600 hover:to-blue-700"
                             >
                                 <PlusIcon className="w-4 h-4" />
                                 New Project
@@ -229,7 +229,7 @@ const DashboardPage = () => {
                     </div>
                 </div>
             </div>
-            <Footer/>
+
       
         </div>
 
@@ -238,8 +238,8 @@ const DashboardPage = () => {
 }
 
 const StatsCard = ({ title, value, gradient }: { title: string; value: number | string; gradient: string }) => (
-    <Card className="p-6 hover:shadow-lg transition-all duration-300 backdrop-blur-sm bg-white/50 dark:bg-gray-900/50 border-2 border-gray-100 dark:border-gray-800">
-        <h3 className="text-lg font-medium text-gray-600 dark:text-gray-300">{title}</h3>
+    <Card className="border-2 border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 hover:shadow-lg backdrop-blur-sm p-6 transition-all duration-300">
+        <h3 className="font-medium text-gray-600 text-lg dark:text-gray-300">{title}</h3>
         <p className={`text-3xl font-bold mt-2 bg-gradient-to-r ${gradient} text-transparent bg-clip-text`}>
             {value}
         </p>

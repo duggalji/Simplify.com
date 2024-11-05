@@ -17,13 +17,16 @@ import {
   Activity,
   Clock,
   Minimize2,
-  Zap
+  Zap,
+  Copy,
+  Check
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useUser } from "@clerk/nextjs"
 import confetti from 'canvas-confetti'
 import { MetricCard } from "./MetricCard"
+import { FileUpload } from './FileUpload'
 
 import yaml from 'js-yaml'
 import { parse as parseToml } from '@iarna/toml'
@@ -661,6 +664,21 @@ export function JsonConverter() {
     }
   }
 
+  const handleUploadComplete = (result: any) => {
+    if (result.success) {
+      setResult(result.data);
+      toast.success('File converted successfully!');
+    } else {
+      setError(result.error);
+      toast.error(result.error || 'File conversion failed');
+    }
+  };
+
+  const handleUploadError = (error: string) => {
+    setError(error);
+    toast.error(error);
+  };
+
   return (
     <div className="w-full space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -751,6 +769,16 @@ export function JsonConverter() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Enter your data here (text, HTML, or Markdown)"
               className="min-h-[200px] font-mono text-sm text-slate-800 bg-white dark:bg-gray-800 resize-none"
+            />
+          </Card>
+
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">
+              Upload File
+            </h3>
+            <FileUpload
+              onUploadComplete={handleUploadComplete}
+              onError={handleUploadError}
             />
           </Card>
 
@@ -914,8 +942,8 @@ export function JsonConverter() {
                   exit={{ opacity: 0 }}
                   className="flex items-center justify-center h-[400px]"
                 >
-                  <p className="text-sm bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent font-medium">
-                    Enter your data and click convert to see the result
+                  <p className="text-sm bg-gradient-to-r from-blue-600 via-pink-500 to-violet-600 bg-clip-text text-transparent font-medium">
+                    Enter your data and click convert to see the result {"   "}😍🚀
                   </p>
                 </motion.div>
               )}
@@ -962,3 +990,4 @@ function calculateCompressionRatio(inputSize: number, outputSize: number): numbe
   return Number(Math.max(1, Math.min(ratio, 100)).toFixed(2));
 }
 
+export default JsonConverter;

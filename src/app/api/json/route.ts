@@ -7,203 +7,159 @@ import { metrics } from "@/_lib/metrics"
 import { parseDocument } from "@/_lib/document-parser"
 import { gemini } from "@/lib/gemini"
 
-// Super flexible request schema that accepts anything
+// Add these exports for Vercel
+export const runtime = 'edge';
+export const maxDuration = 300; // 5 minutes
+export const dynamic = 'force-dynamic';
+
+// Update request schema to handle file uploads
 const requestSchema = z.object({
   data: z.any(),
+  file: z.any().optional(),
   format: z.any().optional(),
-  options: z.any().optional()
+  options: z.object({
+    maxLines: z.number().default(5000),
+    chunkSize: z.number().default(1024 * 1024), // 1MB chunks
+    timeout: z.number().default(240000) // 4 minutes
+  }).default({})
 }).passthrough()
 
-// Enhanced error handling
-class ConversionError extends Error {
-  constructor(message: string, public details?: unknown) {
-    super(message)
-    this.name = 'ConversionError'
-  }
-}
+// Enhanced file processing with better chunking
+async function processLargeFile(file: File): Promise<string> {
+  const chunks: string[] = [];
+  let totalSize = 0;
+  const maxSize = 100 * 1024 * 1024; // 100MB limit
+  const chunkSize = 2 * 1024 * 1024; // 2MB chunks for better memory management
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder();
 
-// Ultra-robust content parser with multiple fallbacks
-const parseContent = async (content: any): Promise<string> => {
   try {
-    // Handle null/undefined
-    if (content == null) return ''
-
-    // Handle strings
-    if (typeof content === 'string') {
-      try {
-        // Try parsing as JSON first
-        JSON.parse(content)
-        return content
-      } catch {
-        // Use document parser for HTML/Markdown
-        return await parseDocument.autoDetect(content)
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      totalSize += value.length;
+      if (totalSize > maxSize) {
+        throw new Error('File exceeds maximum size limit of 100MB');
       }
+      
+      chunks.push(decoder.decode(value, { stream: !done }));
     }
-
-    // Handle arrays
-    if (Array.isArray(content)) {
-      return JSON.stringify(content)
-    }
-
-    // Handle objects
-    if (typeof content === 'object') {
-      return JSON.stringify(content)
-    }
-
-    // Handle primitives
-    return String(content)
-  } catch (error) {
-    // Ultimate fallback
-    return String(content || '')
+    
+    return chunks.join('');
+  } finally {
+    reader.releaseLock();
   }
 }
 
 // Enhanced API handler with maximum resilience
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const requestId = crypto.randomUUID()
-  const startTime = performance.now()
+  const requestId = crypto.randomUUID();
+  const startTime = performance.now();
+  const controller = new AbortController();
+  let timeoutId: NodeJS.Timeout | undefined = undefined;
 
   try {
-    // Parse request body with multiple fallbacks
-    const rawBody = await req.text()
-    let body
-    try {
-      body = JSON.parse(rawBody)
-    } catch {
-      body = { data: rawBody }
+    const contentType = req.headers.get('content-type') || '';
+    let content: string;
+    let fileType: string | undefined;
+
+    // Enhanced file handling
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+      
+      if (!file) {
+        throw new Error('No file provided');
+      }
+
+      fileType = file.name.split('.').pop()?.toLowerCase();
+      content = await processLargeFile(file);
+    } else {
+      const rawBody = await req.text();
+      content = rawBody;
     }
 
-    const { data = "", format = {}, options = {} } = requestSchema.parse(body)
+    // Set dynamic timeout based on content size
+    const timeout = Math.min(
+      300000, // Max 5 minutes
+      Math.max(60000, Math.floor(content.length / 50)) // Min 1 minute
+    );
 
-    // Try cache with error handling
-    const cacheKey = `json-convert:${typeof data === 'string' ? data : JSON.stringify(data)}`
-    try {
-      const cached = await cache.get(cacheKey)
-      if (cached !== undefined && cached !== null) return NextResponse.json(cached)
-    } catch (error) {
-      Logger.info('Cache retrieval failed', { error, requestId })
+    timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Process in smaller chunks for better memory management
+    const chunks = [];
+    const chunkSize = 50000; // 50KB chunks
+    for (let i = 0; i < content.length; i += chunkSize) {
+      chunks.push(content.slice(i, i + chunkSize));
     }
 
-    // Parse content with enhanced flexibility
-    const parsedContent = await parseContent(data)
-
-    // Comprehensive prompt for maximum accuracy
-    const prompt = `
-Convert this data into valid JSON format. Be extremely thorough and extract ALL meaningful data:
-${parsedContent}
-
-Critical Requirements:
-- MUST return 100% valid JSON
-- Accept ANY possible input format
-- Preserve ALL data structure and hierarchy
-- Use null for missing/invalid values
-- Convert ALL types appropriately (numbers, booleans, dates)
-- Maintain ALL arrays and nested structures
-- Extract ALL possible key-value pairs
-- Handle ANY nested/complex structures
-- Preserve ALL numerical values and boolean states
-- Include EVERY piece of meaningful data
-- Clean and sanitize problematic characters
-- Ensure proper escaping of special characters
-
-Return ONLY the valid JSON result with no additional text or formatting.`
-
-    // Enhanced AI interaction with retries
-    const model: GenerativeModel = gemini.getGenerativeModel({
+    // Initialize Gemini with optimized settings
+    const model = gemini.getGenerativeModel({
       model: "gemini-pro",
-    })
+      generationConfig: {
+        temperature: 0.1,
+        topP: 1,
+        topK: 40,
+        maxOutputTokens: 8000,
+      },
+    });
 
-    let result
-    let attempts = 0
-    const maxAttempts = 3
+    let result = '';
+    for (const [index, chunk] of chunks.entries()) {
+      const prompt = `Convert this ${fileType || 'text'} chunk (${index + 1}/${chunks.length}) to valid JSON. 
+                     Preserve all data structure, types, and formatting:
+                     ${chunk}`;
 
-    while (attempts < maxAttempts) {
-      try {
-        result = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }]}],
-          generationConfig: {
-            temperature: 0.1, // Lower temperature for more consistent results
-            topP: 1,
-            topK: 40,
-            maxOutputTokens: 4000,
-          },
-        })
-        break
-      } catch (error) {
-        attempts++
-        if (attempts === maxAttempts) throw error
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempts))
-      }
+      const response = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+      
+      result += response.response.text();
     }
 
-    // Enhanced JSON parsing with multiple attempts
-    let jsonResult
-    try {
-      const cleanedText = result?.response?.text()?.trim() || ''
-      // Try to extract JSON if wrapped in markdown code blocks
-      const jsonMatch = cleanedText.match(/```json?\s*([\s\S]*?)\s*```/) || cleanedText.match(/`([\s\S]*?)`/)
-      const textToparse = jsonMatch ? jsonMatch[1] : cleanedText
-      jsonResult = JSON.parse(textToparse)
-    } catch (error) {
-      // Fallback structure if parsing fails
-      jsonResult = {
-        content: result?.response?.text() || '',
-        format: "unstructured", 
-        originalData: data,
-        parsingError: error instanceof Error ? error.message : 'Unknown parsing error'
-      }
-    }
+    // Clean and parse result
+    const cleanedResult = result
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/(\r\n|\n|\r)/gm, '')
+      .trim();
 
-    // Cache with error handling
-    try {
-      await cache.set(cacheKey, jsonResult, 60 * 60)
-    } catch (error) {
-      Logger.info('Cache storage failed', { error, requestId })
-    }
+    const jsonResult = JSON.parse(cleanedResult);
+
+    if (timeoutId) clearTimeout(timeoutId);
 
     // Track metrics
     metrics.recordConversion({
       success: true,
       duration: performance.now() - startTime,
-      requestId
-    })
+      requestId,
+      // Remove fileSize as it's not in the type definition
+    });
 
-    // Return result with detailed headers
-    return NextResponse.json(jsonResult, {
-      headers: {
-        'X-Request-ID': requestId,
-        'X-Response-Time': `${performance.now() - startTime}ms`,
-        'X-Conversion-Status': 'success'
+    return NextResponse.json({
+      success: true,
+      data: jsonResult,
+      metadata: {
+        requestId,
+        processingTime: `${performance.now() - startTime}ms`,
+        chunkCount: chunks.length,
+        originalSize: content.length,
+        fileType
       }
-    })
+    });
 
   } catch (error) {
-    // Enhanced error handling with detailed logging
-    Logger.error('Conversion error', { 
-      error, 
-      requestId,
-      stack: error instanceof Error ? error.stack : undefined,
-      input: req.body
-    })
+    if (timeoutId) clearTimeout(timeoutId);
+    console.error('Conversion error:', error);
 
-    // Structured error response
-    const errorResponse = {
+    return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      errorType: error instanceof Error ? error.name : 'UnknownError',
-      originalData: req.body,
       requestId,
       timestamp: new Date().toISOString()
-    }
-
-    return NextResponse.json(errorResponse, { 
-      status: 200,
-      headers: {
-        'X-Request-ID': requestId,
-        'X-Error-Time': `${performance.now() - startTime}ms`,
-        'X-Conversion-Status': 'error'
-      }
-    })
+    }, { status: 500 });
   }
 }
 //new code

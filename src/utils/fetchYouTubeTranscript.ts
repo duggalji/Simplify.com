@@ -1,8 +1,8 @@
 import { fetchTranscriptEdge } from './edgeTranscriptFetcher';
 
-const MAX_RETRIES = 1;
-const INITIAL_DELAY = 500;
-const MAX_TIMEOUT = 8000; // 8 seconds max timeout
+const MAX_RETRIES = 2;
+const INITIAL_DELAY = 300;
+const MAX_TIMEOUT = 5000;
 
 export default async function fetchYouTubeTranscript(videoId: string): Promise<string> {
   if (!videoId?.trim()) {
@@ -14,19 +14,25 @@ export default async function fetchYouTubeTranscript(videoId: string): Promise<s
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), MAX_TIMEOUT);
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log('Timeout reached, aborting request');
+      }, MAX_TIMEOUT - (attempt * 1000));
 
       try {
-        console.log(`Attempting to fetch transcript (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        console.log(`Fetching transcript attempt ${attempt + 1}/${MAX_RETRIES} for video ${videoId}`);
         
         const transcript = await fetchTranscriptEdge(videoId.trim());
         clearTimeout(timeoutId);
 
-        if (!transcript || transcript.length < 100) { // Increased minimum length
-          throw new Error('Retrieved transcript is too short or empty');
+        if (!transcript) {
+          throw new Error('Empty transcript received');
         }
 
-        console.log('Successfully fetched transcript');
+        if (transcript.length < 50) {
+          throw new Error('Retrieved transcript is too short');
+        }
+
         return transcript;
 
       } catch (error) {
@@ -40,20 +46,17 @@ export default async function fetchYouTubeTranscript(videoId: string): Promise<s
       console.error(`Transcript fetch attempt ${attempt + 1} failed:`, {
         error: lastError.message,
         videoId,
-        attempt: attempt + 1,
         timestamp: new Date().toISOString()
       });
 
       if (attempt === MAX_RETRIES - 1) {
-        throw new Error(`Failed to fetch transcript after ${MAX_RETRIES} attempts: ${lastError.message}`);
+        break;
       }
 
-      // Exponential backoff with jitter
-      const delay = INITIAL_DELAY * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5);
-      console.log(`Waiting ${Math.round(delay)}ms before next attempt...`);
+      const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt), 1000);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
-  throw lastError || new Error('Failed to fetch transcript after all attempts');
+  throw new Error(`Failed to fetch transcript: ${lastError?.message || 'Unknown error'}`);
 } 

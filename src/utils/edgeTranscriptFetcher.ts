@@ -5,17 +5,16 @@ interface TranscriptSegment {
 }
 
 export async function fetchTranscriptEdge(videoId: string): Promise<string> {
-  const SERVERLESS_TIMEOUT = 3000; // Reduced from 5000 to 3000 for Vercel
+  const SERVERLESS_TIMEOUT = 4000; // Increased from 3000 to 4000
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SERVERLESS_TIMEOUT);
 
   try {
-    // Execute methods sequentially instead of parallel for better reliability
+    // Optimized method order and reduced methods to most reliable ones
     const methods = [
-      () => fetchMethod1(videoId, controller.signal),
-      () => fetchMethod2(videoId, controller.signal),
-      () => fetchMethod3(videoId, controller.signal),
-      () => fetchMethod4(videoId, controller.signal)
+      () => fetchMethod2(videoId, controller.signal), // Innertube API first (most reliable)
+      () => fetchMethod3(videoId, controller.signal), // Direct caption endpoints second
+      () => fetchMethod1(videoId, controller.signal), // Direct YouTube API third
     ];
 
     for (const method of methods) {
@@ -26,7 +25,10 @@ export async function fetchTranscriptEdge(videoId: string): Promise<string> {
           return result;
         }
       } catch (e) {
-        continue; // Try next method if current fails
+        if (e instanceof Error && e.name === 'AbortError') {
+          throw e; // Propagate abort errors
+        }
+        continue;
       }
     }
 
@@ -100,7 +102,9 @@ async function fetchMethod2(videoId: string, signal: AbortSignal): Promise<strin
       signal,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Origin': 'https://www.youtube.com'
       },
       body: JSON.stringify({
         context: {
@@ -108,19 +112,30 @@ async function fetchMethod2(videoId: string, signal: AbortSignal): Promise<strin
             clientName: 'WEB',
             clientVersion: '2.20240101',
             hl: 'en',
-            gl: 'US'
+            gl: 'US',
+            clientScreen: 'WATCH',
+            timeZone: 'UTC'
           }
         },
-        params: btoa(`\n\x0b${videoId}`)
+        params: btoa(`\n\x0b${videoId}`),
+        videoId
       })
     });
 
-    const data = await response.json();
-    return extractTranscriptFromInnertubeResponse(data);
-  } catch (e: unknown) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      console.log('Request timed out in method 2');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    const data = await response.json();
+    const transcript = extractTranscriptFromInnertubeResponse(data);
+    
+    if (!transcript) {
+      throw new Error('No transcript in response');
+    }
+
+    return transcript;
+  } catch (e: unknown) {
+    console.error('Method 2 error:', e instanceof Error ? e.message : 'Unknown error');
     return '';
   }
 }

@@ -19,18 +19,36 @@ const genAI = initializeAI();
 // Advanced file processing with error handling and validation
 class FileProcessor {
   static async processFile(filename: string, buffer: Buffer) {
-    const extension = filename.split('.').pop()?.toLowerCase();
+    if (buffer.length > MAX_FILE_SIZE) {
+      throw new Error(`File ${filename} exceeds size limit of 10MB`);
+    }
 
-    switch (extension) {
-      case 'xlsx':
-      case 'xls':
-        return await this.processExcel(buffer, filename);
-      case 'csv':
-        return await this.processCSV(buffer, filename);
-      case 'pdf':
-        return await this.processPDF(buffer, filename);
-      default:
-        throw new Error(`Unsupported file type: ${extension}`);
+    const extension = filename.split('.').pop()?.toLowerCase();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), PROCESSING_TIMEOUT);
+
+    try {
+      let result;
+      switch (extension) {
+        case 'xlsx':
+        case 'xls':
+          result = await this.processExcel(buffer, filename);
+          break;
+        case 'csv':
+          result = await this.processCSV(buffer, filename);
+          break;
+        case 'pdf':
+          result = await this.processPDF(buffer, filename);
+          break;
+        default:
+          throw new Error(`Unsupported file type: ${extension}`);
+      }
+
+      clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
   }
 
@@ -178,9 +196,9 @@ class FileProcessor {
 class AnalyticsGenerator {
   private model: GenerativeModel | null;
   private data: any;
-  private readonly maxChunkSize: number = 15000; // Reduced for serverless
-  private readonly maxSampleSize: number = 100;  // Reduced for serverless
-  private readonly timeout: number = 8000;      // 8 second timeout
+  private readonly maxChunkSize: number = 10000; // Further reduced for serverless
+  private readonly maxSampleSize: number = 50;   // Further reduced for serverless
+  private readonly timeout: number = 5000;       // Reduced to 5 seconds
 
   constructor() {
     this.model = null;
@@ -300,7 +318,7 @@ class AnalyticsGenerator {
           temperature: 0.7,
           topK: 40,
           topP: 0.8,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 512,
         }
       });
 
@@ -359,15 +377,22 @@ Required Metrics: ${metrics.join(', ')}`;
 //ai
 // Main request handler with proper return type
 export async function POST(request: NextRequest): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 second total timeout
+
   try {
-    const timeoutPromise = new Promise<Response>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 25000);
-    });
-
     const processPromise = processRequest(request);
-    return await Promise.race([processPromise, timeoutPromise]);
+    const result = await Promise.race([
+      processPromise,
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 45000)
+      )
+    ]);
 
+    clearTimeout(timeoutId);
+    return result;
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error('Processing error:', error);
     return NextResponse.json(
       { 
@@ -393,7 +418,7 @@ async function processRequest(request: NextRequest): Promise<Response> {
       );
     }
 
-    // Add file validation
+    // Enhanced file validation
     const validationError = validateFiles(files);
     if (validationError) {
       return NextResponse.json(
@@ -404,9 +429,19 @@ async function processRequest(request: NextRequest): Promise<Response> {
 
     const results = [];
     const errors = [];
+    let totalSize = 0;
 
-    // Process files sequentially
+    // Process files with better error handling
     for (const file of files) {
+      totalSize += file.size;
+      if (totalSize > MAX_TOTAL_SIZE) {
+        errors.push({
+          filename: file.name,
+          error: 'Total file size limit exceeded'
+        });
+        continue;
+      }
+
       try {
         const result = await processFileWithTimeout(file);
         results.push(result);
@@ -442,9 +477,27 @@ async function processRequest(request: NextRequest): Promise<Response> {
 
 // Helper functions
 function validateFiles(files: File[]): string | null {
-  if (files.some(file => file.size > 50 * 1024 * 1024)) {
-    return 'File size exceeds 50MB limit';
+  if (files.length > 5) {
+    return 'Maximum 5 files allowed per request';
   }
+
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_TOTAL_SIZE) {
+    return 'Total file size exceeds 30MB limit';
+  }
+
+  if (files.some(file => file.size > MAX_FILE_SIZE)) {
+    return 'Individual file size exceeds 10MB limit';
+  }
+
+  const allowedTypes = ['xlsx', 'xls', 'csv', 'pdf'];
+  const invalidFile = files.find(file => 
+    !allowedTypes.includes(file.name.split('.').pop()?.toLowerCase() || '')
+  );
+  if (invalidFile) {
+    return `Unsupported file type: ${invalidFile.name}`;
+  }
+
   return null;
 }
 
@@ -456,61 +509,64 @@ interface FileProcessingResult {
   timestamp: string;
 }
 
-// Update processFileWithTimeout with proper typing
+// Update processFileWithTimeout with better error handling
 async function processFileWithTimeout(file: File): Promise<FileProcessingResult> {
-  const timeoutPromise = new Promise<FileProcessingResult>((_, reject) => 
-    setTimeout(() => reject(new Error('File processing timeout')), 15000)
-  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROCESSING_TIMEOUT);
 
-  const processPromise = async (): Promise<FileProcessingResult> => {
-    try {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const processedData = await FileProcessor.processFile(file.name, buffer);
-      
-      const analyticsGenerator = new AnalyticsGenerator();
-      analyticsGenerator.setModel(genAI.getGenerativeModel({ 
-        model: "gemini-pro",
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.7,
-          topP: 0.8,
-          topK: 40
-        }
-      }));
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const processedData = await FileProcessor.processFile(file.name, buffer);
+    
+    const analyticsGenerator = new AnalyticsGenerator();
+    analyticsGenerator.setModel(genAI.getGenerativeModel({ 
+      model: "gemini-pro",
+      generationConfig: {
+        maxOutputTokens: 512, // Reduced for better performance
+        temperature: 0.7,
+        topP: 0.8,
+        topK: 40
+      }
+    }));
 
-      const section = {
-        title: "File Analysis",
-        subsections: {
-          primary: ["Data Overview", "Key Metrics"],
-          deep: ["Statistical Analysis", "Data Distribution"]
-        }
-      };
+    const section = {
+      title: "File Analysis",
+      subsections: {
+        primary: ["Data Overview"],  // Reduced metrics for better performance
+        deep: ["Statistical Analysis"]
+      }
+    };
 
-      const analytics = await analyticsGenerator.generateAnalytics(
-        processedData,
-        section,
-        file.name
-      );
+    const analytics = await analyticsGenerator.generateAnalytics(
+      processedData,
+      section,
+      file.name
+    );
 
-      return {
-        filename: file.name,
-        processedData,
-        analytics,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      throw new Error(`Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  return Promise.race([processPromise(), timeoutPromise]);
+    clearTimeout(timeoutId);
+    return {
+      filename: file.name,
+      processedData,
+      analytics,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw new Error(`Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 // Configuration for Vercel serverless
 export const runtime = 'edge';
-export const maxDuration = 30;
+export const maxDuration = 20; // Increased to 60 seconds for file processing
 export const preferredRegion = 'auto';
 export const dynamic = 'force-dynamic';
+
+// Add size limits and timeout constants
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+const MAX_TOTAL_SIZE = 30 * 1024 * 1024; // 30MB total
+const PROCESSING_TIMEOUT = 20000; // 20 seconds
+const ANALYTICS_TIMEOUT = 15000; // 15 seconds
 
 // Add after imports
 interface AnalyticsSection {
