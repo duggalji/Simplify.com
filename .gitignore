@@ -38,5 +38,10 @@ next-env.d.ts
 
 # others
 todo.md
-/app/api/*
-!app/api/.gitkeep
+
+# Keep API private on GitHub but available on Vercel
+# The following lines will be ignored by Vercel deployment
+# but will prevent the API code from being pushed to GitHub
+src/app/api/*
+!src/app/api/.gitkeep
+!src/app/api/README.md
