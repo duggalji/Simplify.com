@@ -1,5 +1,4 @@
-## Simplify.ai⚡️![Your #1 advanced](https://github.com/user-attachments/assets/3520e730-9683-4f50-a9fb-e6c775b82f26)
-
+## Simplify.ai⚡️
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
@@ -61,6 +60,7 @@ Simplify.ai is an enterprise-ready platform that harnesses cutting-edge AI techn
   - Performance analytics
 
 ## 🛠 Getting Started
+![Your #1 advanced](https://github.com/user-attachments/assets/3520e730-9683-4f50-a9fb-e6c775b82f26)
 
 ### Prerequisites
 
